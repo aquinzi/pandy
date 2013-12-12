@@ -1,7 +1,7 @@
 pandy
 ======
 
-Basically takes a file/folder, input the markup to convert from, the output markup and runs it through pandoc.
+Basically takes a file/folder, input the markup to convert from, the output markup and runs it through [pandoc](http://johnmacfarlane.net/pandoc/).
 
 Usage
 --------
