@@ -1545,7 +1545,7 @@ if __name__ == '__main__':
 
 # History (File Last Updated on $Date$ )
 
-# 2013-12-10: version 1.8
+# 2013-12-10: version 1.8 (released)
 #             code refactoring
 #             Less call to globals/obvious params 
 #             wikiLinks: if md link has no title and it's an existing file, use the filename as title 
@@ -1579,7 +1579,7 @@ if __name__ == '__main__':
 #             add simple tests / debug
 #             Finish admonition parsing
 #
-# 2013-12-05: version 1.5
+# 2013-12-05: version 1.5 (released)
 #             rewritten and to include cool stuff
 #             + admonition parsing
 #             + Abbreviations parsing markdown -> html
