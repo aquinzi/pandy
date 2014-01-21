@@ -49,11 +49,10 @@ Some text with an ABBR and a REF. Ignore REFERENCE and ref.
 
 admonitions with my own markup 
 
-<admon "class/type" "optional title">
+[class/type:optional title]
   * markdown
   * super
   * content
-</admon>
 
 And these markdown extensions are automatically added: 'link_attributes', 'hard_line_breaks'
 
@@ -117,7 +116,7 @@ import difflib # for testing
 # ==== info & pandoc config ====
 # ==============================
 
-__version__ = "1.8"
+__version__ = "1.8.1"
 _MY_USAGE = ''' %(prog)s [source] [format_from] [format_to] [other options]
  
  [format_to] can be a list of formats; separated with spaces 
@@ -1283,8 +1282,8 @@ def parse_abbreviations(text):
 
 	return newtext
 
-def parse_admonitions(text):
-	""" Find and parse my admonitions. 
+def parse_admonitions_taghtml(text):
+	""" (old, keep for legacy) Find and parse my admonitions. 
 	Input text: as list (just after open)
 	returns parsed text as list
 
@@ -1336,6 +1335,71 @@ def parse_admonitions(text):
 			new_test.append(line)
 
 	return new_test
+
+def parse_admonitions(text):
+    """ Find and parse my admonitions. 
+    Input text: as list (just after open)
+    returns parsed text as list
+
+    Syntax:
+    [class/type:optional title]
+      * markdown
+      * super
+      * content
+    
+    would be translated as div:
+    <div class="admonition class/type">
+    <p class="admonition-title"> Optional title </p>
+      * markdown
+      * super
+      * content
+    </div>
+    """
+
+    new_test = list()
+    admon_start = False
+
+    for line in text:
+        if line.startswith("[") and line.endswith("]\n"):
+            admon_start = True
+
+            line = line.rstrip()
+            line = line[1:len(line)-1]
+            
+            if ":" in line:
+                admon_type, admon_title = line.split(':')
+            else:
+                admon_type = line
+                admon_title = None
+
+            new_str = '<div class="admonition ' + admon_type + '">'
+            new_test.append(new_str)
+
+            if admon_title:
+                new_test.append('<p class="admonition-title">' + admon_title + '</p>')
+
+            continue 
+
+        if (line.startswith("\t") or line.startswith ("    ") or line == "\n") and admon_start:
+            if not line == "\n":
+                #remove first set of whitespace
+                if line.startswith("\t"):
+                   pattern = r'^\t{1}(.+)'
+                else:
+                   pattern = r'^\s{1,4}'
+                
+                line = re.sub(pattern, '\\1', line)
+
+            new_test.append(line)
+
+        else:
+            if admon_start:
+                new_test.append("</div>\n")
+
+            new_test.append(line)
+            admon_start = False
+
+    return new_test
 
 def find_TOCinFile(text, placeholder, replace_with='<!-- TOCatized -->'):
 	""" automatically check if text (as list) has the TOC tag. Replaces 
