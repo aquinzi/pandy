@@ -104,6 +104,16 @@ Specify the configuration file with ``--config`` (the extension doesn't matter, 
 History
 -----------
 
+### Version 1.8.1
+
+New admonition syntax:
+
+  [class/type:optional title]
+    * markdown
+    * super
+    * content
+
+
 ### Version 1.8
 
   * Clean up code and refactoring 
