@@ -1,7 +1,7 @@
 pandy
 ======
 
-Basically takes a file/folder, input the markup to convert from, the output markup and runs it through [pandoc](http://johnmacfarlane.net/pandoc/).
+Basically takes a file/folder, input the markup to convert from, the output markup and runs it through pandoc.
 
 Usage
 --------
@@ -79,16 +79,12 @@ If you use markdown and convert to HTML, there're some goodies for you. You can 
 
 And admonitions with this markup:
 
-	<admon "class/type" "optional title">
+	[class/type:optional title]
 	  * markdown
 	  * super
 	  * content
-	</admon>
 
 The "class/type" would be something like "information", "danger", "tip", "hint", "hungry", "duck", "yay" ...
-
-
-
 
 You can also include a tag for TOC (``[TOCME]``) to have that file with a TOC instead of remembering to enter --toc or separating files in two groups and then placing them together. (It just adds it automatically after searching the file, no magic here)
 
@@ -107,6 +103,16 @@ Specify the configuration file with ``--config`` (the extension doesn't matter, 
 
 History
 -----------
+
+### Version 1.8.1
+
+New admonition syntax:
+
+  [class/type:optional title]
+    * markdown
+    * super
+    * content
+
 
 ### Version 1.8
 
