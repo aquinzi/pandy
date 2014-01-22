@@ -108,11 +108,10 @@ History
 
 New admonition syntax:
 
-  [class/type:optional title]
-    * markdown
-    * super
-    * content
-
+    [class/type:optional title]
+      * markdown
+      * super
+      * content
 
 ### Version 1.8
 
