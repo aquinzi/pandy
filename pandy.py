@@ -783,11 +783,11 @@ class TestProgram(argparse.Action):
 		""" Parsing admonitions """
 
 		str_from = '''
-			<admon "info" "Optional title">
-			* markdown
-			* super
-			* content
-			</admon>
+			[class/type:optional title]
+				* markdown
+				* super
+				* content
+			
 		'''
 
 		str_from = str_from.replace('\t', '') # so can collapse string above
