@@ -1609,6 +1609,8 @@ if __name__ == '__main__':
 
 # History (File Last Updated on $Date$ )
 
+# 2014-01-21: version 1.8.1 (released)
+#             new formatting for admonition
 # 2013-12-10: version 1.8 (released)
 #             code refactoring
 #             Less call to globals/obvious params 
