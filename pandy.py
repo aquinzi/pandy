@@ -4,99 +4,99 @@
 # tested for pandoc 1.12.1
 
 """
-Basically takes a file/folder, input the markup to convert from, the output markup and run it through pandoc.
+	Basically takes a file/folder, input the markup to convert from, the output markup and run it through pandoc.
 
-More explained:
-From a file/folder/.list, input the "from" markup and the output format, which can be a list separated with spaces. Formats are stripped down to the most common ones:
+	More explained:
+	From a file/folder/.list, input the "from" markup and the output format, which can be a list separated with spaces. Formats are stripped down to the most common ones:
 
-	from: docbook, html, json, latex, markdown, markdown_github, markdown_mmd, markdown_phpextra, markdown_strict, mediawiki, mw, opml, rst, textile
-	output: all the above +  asciidoc, beamer, docx (or doc), epub, epub3, fb2, html5, odt, opendocument (or opendoc), pdf, plain, rtf, slides (or slide)
+		from: docbook, html, json, latex, markdown, markdown_github, markdown_mmd, markdown_phpextra, markdown_strict, mediawiki, mw, opml, rst, textile
+		output: all the above +  asciidoc, beamer, docx (or doc), epub, epub3, fb2, html5, odt, opendocument (or opendoc), pdf, plain, rtf, slides (or slide)
 
-	 All "markdown"s can be entered as "md". So: markdown -> md; markdown_github -> md_github; etc
+		 All "markdown"s can be entered as "md". So: markdown -> md; markdown_github -> md_github; etc
 
-You can input some options of pandoc but with different names:
+	You can input some options of pandoc but with different names:
 
---output, -o          Output folder
---self                self contained file
---header FILE         Header file. Included as it is (raw, verbatim)
---footer FILE         Footer file. Included as it is (raw, verbatim)
---index FILE          Custom index file for book. Can use wiki links
---html4               Use html4 output instead of html5
---merge, -m           Merge files.
---slides              Slides format.
---bib FILE            Use bibliography file
---css FILE            External CSS
---highlight           Highlight style. 
---highlight-no        No highlight
---tpl FILE            Template file.
---toc, -t             include TOC
---depth               TOC depth.
---hide                e-mail obfuscation
---sections            Wrap sections in <sections>, attach identifiers instead of titles
---pandoc PANDOC       Pandoc path. Default: pandoc
---data-dir FOLDER     Data directory
+	--output, -o          Output folder
+	--self                self contained file
+	--header FILE         Header file. Included as it is (raw, verbatim)
+	--footer FILE         Footer file. Included as it is (raw, verbatim)
+	--index FILE          Custom index file for book. Can use wiki links
+	--html4               Use html4 output instead of html5
+	--merge, -m           Merge files.
+	--slides              Slides format.
+	--bib FILE            Use bibliography file
+	--css FILE            External CSS
+	--highlight           Highlight style. 
+	--highlight-no        No highlight
+	--tpl FILE            Template file.
+	--toc, -t             include TOC
+	--depth               TOC depth.
+	--hide                e-mail obfuscation
+	--sections            Wrap sections in <sections>, attach identifiers instead of titles
+	--pandoc PANDOC       Pandoc path. Default: pandoc
+	--data-dir FOLDER     Data directory
 
-As well as some of my own:
---flat                Don't keep folder structure
---book, -b            Make a book with navigation (next/prev) and index
---nav, -n             (For book) use titles in navigation
---config FILE         Use a configuration file (option=key values)
+	As well as some of my own:
+	--flat                Don't keep folder structure
+	--book, -b            Make a book with navigation (next/prev) and index
+	--nav, -n             (For book) use titles in navigation
+	--config FILE         Use a configuration file (option=key values)
 
-If you use markdown and convert to HTML, there're some goodies for you. You can have abbreviations, as PHP Markdown Extra:
+	If you use markdown and convert to HTML, there're some goodies for you. You can have abbreviations, as PHP Markdown Extra:
 
-Some text with an ABBR and a REF. Ignore REFERENCE and ref.
-*[ABBR]: Abbreviation
-*[REF]: Abbreviation Reference
+	Some text with an ABBR and a REF. Ignore REFERENCE and ref.
+	*[ABBR]: Abbreviation
+	*[REF]: Abbreviation Reference
 
-admonitions with my own markup 
+	admonitions with my own markup 
 
-[class/type:optional title]
-  * markdown
-  * super
-  * content
+	[class/type:optional title]
+	  * markdown
+	  * super
+	  * content
 
-And these markdown extensions are automatically added: 'link_attributes', 'hard_line_breaks'
+	And these markdown extensions are automatically added: 'link_attributes', 'hard_line_breaks'
 
-You can also include a tag for toc ([TOCME]) to have that file with a toc instead of remembering to enter --toc. (It just adds it automatically after searching the file, no magic here)
+	You can also include a tag for toc ([TOCME]) to have that file with a toc instead of remembering to enter --toc. (It just adds it automatically after searching the file, no magic here)
 
-For book: you can create your own index and have "wikiLinks" as [](file|nice_file.txt). It will render as [title of file](nice_file.html) 
+	For book: you can create your own index and have "wikiLinks" as [](file|nice_file.txt). It will render as [title of file](nice_file.html) 
 
-If you don't like setting the options in the CLI, or having a script, you can create your configuration in a key=value file (like ini). Example: myconfiguration.ini contains:
+	If you don't like setting the options in the CLI, or having a script, you can create your configuration in a key=value file (like ini). Example: myconfiguration.ini contains:
 
-PANDOC_DATA_DIR = "C:\Program Files\Pandoc"
-TEMPLATE = 'github.html'
-HIGHLIGHT= 'zenburn'
+	PANDOC_DATA_DIR = "C:\Program Files\Pandoc"
+	TEMPLATE = 'github.html'
+	HIGHLIGHT= 'zenburn'
 
-Specify the configuration file with --config (the extension doesn't matter, and INI headers are ignored. Don't worry)
+	Specify the configuration file with --config (the extension doesn't matter, and INI headers are ignored. Don't worry)
 
--------------------------
+	-------------------------
 
-extensions enabled by default (pandoc): 
+	extensions enabled by default (pandoc): 
 
-	headerid -> auto_identifiers; 
-	Attribute Lists -> (only headers) header_attributes; 
-	fenced_code_blocks (~~~~ & ```) and attributes (#mycode .haskell .numberLines startFrom="100")  or ```haskell; 
-	definition_lists; 
-	tables: simple_tables, multiline_tables, grid_tables, pipe_tables (like pymd); 
-	meta: pandoc_title_block, yaml_metadata_block; 
-	smart strong -> intraword_underscores; 
-	footnotes (no !DEF); 
-	inline_notes; 
-	citations
+		headerid -> auto_identifiers; 
+		Attribute Lists -> (only headers) header_attributes; 
+		fenced_code_blocks (~~~~ & ```) and attributes (#mycode .haskell .numberLines startFrom="100")  or ```haskell; 
+		definition_lists; 
+		tables: simple_tables, multiline_tables, grid_tables, pipe_tables (like pymd); 
+		meta: pandoc_title_block, yaml_metadata_block; 
+		smart strong -> intraword_underscores; 
+		footnotes (no !DEF); 
+		inline_notes; 
+		citations
 
-markdown variants
+	markdown variants
 
-	markdown_phpextra (PHP Markdown Extra)
-	footnotes, pipe_tables, raw_html, markdown_attribute, fenced_code_blocks, definition_lists, intraword_underscores, header_attributes, abbreviations.
+		markdown_phpextra (PHP Markdown Extra)
+		footnotes, pipe_tables, raw_html, markdown_attribute, fenced_code_blocks, definition_lists, intraword_underscores, header_attributes, abbreviations.
 
-	markdown_github (Github-flavored Markdown)
-	pipe_tables, raw_html, tex_math_single_backslash, fenced_code_blocks, fenced_code_attributes, auto_identifiers, ascii_identifiers, backtick_code_blocks, autolink_bare_uris, intraword_underscores, strikeout, hard_line_breaks
+		markdown_github (Github-flavored Markdown)
+		pipe_tables, raw_html, tex_math_single_backslash, fenced_code_blocks, fenced_code_attributes, auto_identifiers, ascii_identifiers, backtick_code_blocks, autolink_bare_uris, intraword_underscores, strikeout, hard_line_breaks
 
-	markdown_mmd (MultiMarkdown)
-	pipe_tables raw_html, markdown_attribute, link_attributes, raw_tex, tex_math_double_backslash, intraword_underscores, mmd_title_block, footnotes, definition_lists, all_symbols_escapable, implicit_header_references, auto_identifiers, mmd_header_identifiers
+		markdown_mmd (MultiMarkdown)
+		pipe_tables raw_html, markdown_attribute, link_attributes, raw_tex, tex_math_double_backslash, intraword_underscores, mmd_title_block, footnotes, definition_lists, all_symbols_escapable, implicit_header_references, auto_identifiers, mmd_header_identifiers
 
-	markdown_strict (Markdown.pl)
-	raw_html
+		markdown_strict (Markdown.pl)
+		raw_html
 """
 
 from __future__ import print_function, unicode_literals
@@ -117,7 +117,7 @@ import re
 
 MY_CONFIGS = {
 	'PANDOC_DATA_DIR' : "C:\\Program Files\\Pandoc",
-	'TEMPLATE': 'github.html',
+	'TEMPLATE': 'github_sidebartitles.html',
 	'HIGHLIGHT': 'zenburn',
 }
 
@@ -236,6 +236,7 @@ _DEFAULT_CONFIG = {
 	'BOOK': False,
 	'FILE_INDEX': '',
 	'NAV_TITLE': False,  #For book, use title navigation
+	'NAV_SIDEBAR': False,  #For book, sidebar with titles
 
 	'EMAIL_HIDE': False, # e-mail obfuscation (default none, true = references)
 	'BIBLIOGRAPHY': '',
@@ -646,15 +647,39 @@ class Pandy(object):
 				newcommand = command_base + cmd_to + cmd_out + ['--metadata=title:' + name]
 				run_subprocess(newcommand, True, merged_files)
 
-	def _parseBook(self):
-		"""MAke a book with navigation between files """
+	def listTitles(self):
+		"""Get a titles list (html) of all the files. 
+		For Sidebar title list
+		"""
 
 		filesTotal = len(self.files)
-		bookIndex  = "<ul>"
+		bookIndex = ""
 
 		i = 0
 		while i < filesTotal:
 			newcommand = list(self.command)
+			file_current = self._singleFileProperties(self.files[i], newcommand, specials=True)
+
+			relative = path_relative_to(file_current['path_output'], self.output, True)
+			bookIndex += '<li><a href="' + relative + '">' + \
+							file_current['title'] + '</a></li>'
+			i += 1
+
+		self.listTitles = "<ul>" + bookIndex + "</ul>"
+
+
+	def _parseBook(self):
+		"""Make a book with navigation between files """
+
+		filesTotal = len(self.files)
+		self.listTitles()
+
+		i = 0
+		while i < filesTotal:
+			newcommand = list(self.command)
+
+			if self.settings['NAV_SIDEBAR']:
+				newcommand.append('--variable=book_navigation:'+str(self.listTitles))
 			
 			# prepare prev, current and next files
 			if i == 0:
@@ -665,11 +690,6 @@ class Pandy(object):
 			if (i + 1) < filesTotal:
 				file_next = self._singleFileProperties(self.files[i + 1], newcommand, specials=True) 
 		
-			# index navigation
-			file_current_relative = path_relative_to(file_current['path_output'], self.output, True)
-			bookIndex += '<li><a href="' + file_current_relative + '">' + \
-							file_current['title'] + '</a></li>'
-
 			# book navigation
 			navigation = self._bookNavigation(file_current['path_output'], 
 				                          file_previous['path_output'], file_previous['title'], 
@@ -697,6 +717,7 @@ class Pandy(object):
 		index_ouput = os.path.join(self.output, "index.html")
 		index_file = self.settings['FILE_INDEX']
 
+
 		if index_file and os.path.exists(index_file):
 			index_text = cmd_open_file(index_file)
 			index_text = index_text.split("\n")
@@ -706,7 +727,7 @@ class Pandy(object):
 			newcommand = list(self.command)
 		else:
 			#build index
-			index_text = bookIndex + "</ul>"
+			index_text = self.listTitles
 		
 		newcommand += ['-o', index_ouput, '--metadata=title:Index']
 		run_subprocess(newcommand, True, index_text)
@@ -1294,6 +1315,7 @@ def get_args():
 	other.add_argument("--sections", action='store_true', help="Wrap sections in <sections>, attach identifiers instead of titles")
 
 	other.add_argument("--nav", "-n", help="(For book) use titles in navigation", action="store_true")
+	other.add_argument("--navside", help="(For book) Make a sidebar with titles", action="store_true")
 	other.add_argument("--config", help="Use a configuration file (option=key values)", metavar="FILE")
 
 	pandoc = parser.add_argument_group(' Pandoc')
@@ -1322,7 +1344,8 @@ def get_args():
 		'header': 'FILE_HEADER',
 		'footer': 'FILE_FOOTER',
 		'index': 'FILE_INDEX',
-		'depth' : 'TOC_DEPTH'
+		'depth' : 'TOC_DEPTH',
+		'navside' : 'NAV_SIDEBAR',
 		}
 
 	#just convert to uppercase
@@ -1414,6 +1437,8 @@ if __name__ == '__main__':
 
 # History (File Last Updated on $Date$ )
 
+# 2014-01-23: add titles in sidebar for navigation
+# 
 # 2014-01-21: version 1.8.1 (released)
 #             new syntax for admonition
 #             
