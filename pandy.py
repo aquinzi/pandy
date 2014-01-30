@@ -1,7 +1,7 @@
 # "Wrapper" for Pandoc (python 2.7): pandy [file/folder] [from] [to] [other options]
 # -*- coding: utf-8 -*-
 
-# tested for pandoc 1.12.1
+# tested for pandoc 1.12.3
 
 """
 	Basically takes a file/folder, input the markup to convert from, the output markup and run it through pandoc.
@@ -126,7 +126,7 @@ MY_CONFIGS = {
 # ==== info & pandoc config ====
 # ==============================
 
-__version__ = "1.8.1"
+__version__ = "1.8.2"
 _MY_USAGE = ''' %(prog)s [source] [format_from] [format_to] [other options]
  
  [format_to] can be a list of formats; separated with spaces 
@@ -259,7 +259,14 @@ class Pandy(object):
 		self.files       = []
 		self.command     = []
 
-		self.files = files_list(self.input)
+
+		onlyExts = tuple()
+		if self.format_from == "html":
+			onlyExts = (".html", ".htm")
+		
+		
+		self.files = files_list(self.input, only_exts=onlyExts)
+
 		self.format_from, self.format_to = check_synonyms(self.format_from, self.format_to)
 
 		# make base pandoc command. 
@@ -290,7 +297,7 @@ class Pandy(object):
 		print("")
 		# File or files in folder / list
 		if not merge and not book:
-			print ("  Parsing files individually ... ")
+			print ("  Parsing files individually ... \n")
 			self._parseIndividually()
 
 		else:
@@ -300,7 +307,7 @@ class Pandy(object):
 
 			# merge
 			if merge:
-				print ("  Parsing files and merging ... ")
+				print ("  Parsing files and merging ... \n")
 				self._parseMerge()
 			else:
 				# book
@@ -333,7 +340,7 @@ class Pandy(object):
 						"it should be in markdown. It appears that you haven't specified it.",
 						"The wiki links weren't parsed")
 
-				print ("  Parsing files and making book ... ")
+				print ("  Parsing files and making book ... \n")
 				self._parseBook()
 
 	def _getOutputPath(self, filepath):
@@ -532,10 +539,10 @@ class Pandy(object):
 	def _parseIndividually(self):
 		"""Parses file individually """
 
-
 		for filey in self.files:
 			newcommand = list(self.command)
 			path       = self._getOutputPath(filey)
+			print (" Converting: " + path_getFilename(filey))
 
 			for ext in self.format_to:
 				if not ext == "html":
@@ -685,6 +692,7 @@ class Pandy(object):
 			if i == 0:
 				file_previous = self._singleFileProperties("")
 
+			print (" Converting: " + path_getFilename(self.files[i]))
 			file_current = self._singleFileProperties(self.files[i], newcommand, specials=True)
 			
 			if (i + 1) < filesTotal:
@@ -866,8 +874,11 @@ def save(path, text):
 	with cmd as outputFile:
 		outputFile.write(text)
 
-def files_get(path):
-	""" Get a list of files in dir. Returns list """ 
+def files_get(path, only_exts=()):
+	""" Get a list of files in dir. Returns list 
+	:param:only_exts tuple to include only selected extensions (mainly for html pages saved
+		locally (which has folders > images ) )
+	""" 
 
 	theFiles = list()
 
@@ -879,12 +890,12 @@ def files_get(path):
 			for filename in files:
 				filePath = os.path.join(root, filename)
 
-				if os.path.exists(filePath):
+				if os.path.exists(filePath) and filePath.endswith(only_exts):
 					theFiles.append(filePath)
 
 	return theFiles	
 
-def files_list(path):
+def files_list(path, only_exts=None):
 	"""Gets the files from the .list (returns list). If not a .list, calls files_get()"""
 
 	if path.endswith(".list"):
@@ -899,7 +910,7 @@ def files_list(path):
 					fileList.append(line)
 		return fileList
 	
-	return files_get(path)
+	return files_get(path, only_exts)
 
 def cmd_open_write(path, mode):
 	""" Create the open/write command according to python version 
@@ -1437,6 +1448,9 @@ if __name__ == '__main__':
 
 # History (File Last Updated on $Date$ )
 
+# 2014-01-30: prints file being converted
+#             Filter extensions for converting, only html (hardcoded)
+# 
 # 2014-01-23: add titles in sidebar for navigation
 # 
 # 2014-01-21: version 1.8.1 (released)
