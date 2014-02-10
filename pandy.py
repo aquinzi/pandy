@@ -1199,6 +1199,7 @@ def parse_admonitions(text):
     admon_start = False
 
     for line in text:
+
         if line.startswith("[") and (line.endswith("]\n") or line.endswith("]")):
             admon_start = True
 
@@ -1253,6 +1254,7 @@ def find_TOCinFile(text, placeholder, replace_with='<!-- TOCatized -->'):
 			hasTOC = True 
 
 	return hasTOC, text 
+
 
 # =============================
 # == methods: help parsing ====
