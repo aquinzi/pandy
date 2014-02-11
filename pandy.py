@@ -1,105 +1,5 @@
 #! python3
-# "Wrapper" for Pandoc (python 3): pandy [file/folder] [from] [to] [other options]
-
 # -*- coding: utf-8 -*-
-# tested for pandoc 1.12.3
-
-"""
-	Basically takes a file/folder, input the markup to convert from, the output markup and run it through pandoc.
-
-	More explained:
-	From a file/folder/.list, input the "from" markup and the output format, which can be a list separated with spaces. Formats are stripped down to the most common ones:
-
-		from: docbook, html, json, latex, markdown, markdown_github, markdown_mmd, markdown_phpextra, markdown_strict, mediawiki, mw, opml, rst, textile
-		output: all the above +  asciidoc, beamer, docx (or doc), epub, epub3, fb2, html5, odt, opendocument (or opendoc), pdf, plain, rtf, slides (or slide)
-
-		 All "markdown"s can be entered as "md". So: markdown -> md; markdown_github -> md_github; etc
-
-	You can input some options of pandoc but with different names:
-
-	--output, -o          Output folder
-	--self                self contained file
-	--header FILE         Header file. Included as it is (raw, verbatim)
-	--footer FILE         Footer file. Included as it is (raw, verbatim)
-	--index FILE          Custom index file for book. Can use wiki links
-	--html4               Use html4 output instead of html5
-	--merge, -m           Merge files.
-	--slides              Slides format.
-	--bib FILE            Use bibliography file
-	--css FILE            External CSS
-	--highlight           Highlight style. 
-	--highlight-no        No highlight
-	--tpl FILE            Template file.
-	--toc, -t             include TOC
-	--depth               TOC depth.
-	--hide                e-mail obfuscation
-	--sections            Wrap sections in <sections>, attach identifiers instead of titles
-	--pandoc PANDOC       Pandoc path. Default: pandoc
-	--data-dir FOLDER     Data directory
-
-	As well as some of my own:
-	--flat                Don't keep folder structure
-	--book, -b            Make a book with navigation (next/prev) and index
-	--nav, -n             (For book) use titles in navigation
-	--navside             (For book) Make a sidebar with titles
-	--config FILE         Use a configuration file (option=key values)
-
-	If you use markdown and convert to HTML, there're some goodies for you. You can have abbreviations, as PHP Markdown Extra:
-
-	Some text with an ABBR and a REF. Ignore REFERENCE and ref.
-	*[ABBR]: Abbreviation
-	*[REF]: Abbreviation Reference
-
-	admonitions with my own markup 
-
-	[class/type:optional title]
-	  * markdown
-	  * super
-	  * content
-
-	And these markdown extensions are automatically added: 'link_attributes', 'hard_line_breaks'
-
-	You can also include a tag for toc ([TOCME]) to have that file with a toc instead of remembering to enter --toc. (It just adds it automatically after searching the file, no magic here)
-
-	For book: you can create your own index and have "wikiLinks" as [](file|nice_file.txt). It will render as [title of file](nice_file.html) 
-
-	If you don't like setting the options in the CLI, or having a script, you can create your configuration in a key=value file (like ini). Example: myconfiguration.ini contains:
-
-	PANDOC_DATA_DIR = "C:\Program Files\Pandoc"
-	TEMPLATE = 'github.html'
-	HIGHLIGHT= 'zenburn'
-
-	Specify the configuration file with --config (the extension doesn't matter, and INI headers are ignored. Don't worry)
-
-	-------------------------
-
-	extensions enabled by default (pandoc): 
-
-		headerid -> auto_identifiers; 
-		Attribute Lists -> (only headers) header_attributes; 
-		fenced_code_blocks (~~~~ & ```) and attributes (#mycode .haskell .numberLines startFrom="100")  or ```haskell; 
-		definition_lists; 
-		tables: simple_tables, multiline_tables, grid_tables, pipe_tables (like pymd); 
-		meta: pandoc_title_block, yaml_metadata_block; 
-		smart strong -> intraword_underscores; 
-		footnotes (no !DEF); 
-		inline_notes; 
-		citations
-
-	markdown variants
-
-		markdown_phpextra (PHP Markdown Extra)
-		footnotes, pipe_tables, raw_html, markdown_attribute, fenced_code_blocks, definition_lists, intraword_underscores, header_attributes, abbreviations.
-
-		markdown_github (Github-flavored Markdown)
-		pipe_tables, raw_html, tex_math_single_backslash, fenced_code_blocks, fenced_code_attributes, auto_identifiers, ascii_identifiers, backtick_code_blocks, autolink_bare_uris, intraword_underscores, strikeout, hard_line_breaks
-
-		markdown_mmd (MultiMarkdown)
-		pipe_tables raw_html, markdown_attribute, link_attributes, raw_tex, tex_math_double_backslash, intraword_underscores, mmd_title_block, footnotes, definition_lists, all_symbols_escapable, implicit_header_references, auto_identifiers, mmd_header_identifiers
-
-		markdown_strict (Markdown.pl)
-		raw_html
-"""
 
 import sys
 
@@ -113,21 +13,6 @@ import sys
 import os
 import codecs
 import re
-
-# ==============================
-# ==== Remove if publishing ====
-# ==============================
-
-# Cool stuff to include someday:
-# Enable/disble extensions from cli
-# custom css/js: --include-in-header
-
-MY_CONFIGS = {
-	'PANDOC_DATA_DIR' : "C:\\Program Files\\Pandoc",
-	'TEMPLATE': 'github_sidebartitles.html',
-	'HIGHLIGHT': 'zenburn',
-}
-
 
 # ==============================
 # ==== info & pandoc config ====
@@ -1461,79 +1346,7 @@ if __name__ == '__main__':
 	print ("\n  ------------------ STARTING ------------------------------")
 	CONFIG = prepare_args(args)
 
-	if MY_CONFIGS and isinstance(MY_CONFIGS, dict):
-		CONFIG.update(MY_CONFIGS)
-
 	# steady, ready, go!
 	Pandy(CONFIG)
 	
 	print ("\n  ------------------ DONE! :) ------------------------------")
-
-
-# History (File Last Updated on $Date: 2014-02-11 13:21:29 -0300 (mar, 11 feb 2014) $ )
-
-# 2014-02-11: version 1.9 (released)
-#             only python 3
-#             fixes for book
-# 
-# 2014-01-30: prints file being converted
-#             Filter extensions for converting, only html (hardcoded)
-# 
-# 2014-01-23: add titles in sidebar for navigation
-# 
-# 2014-01-21: version 1.8.1 (released)
-#             new syntax for admonition
-# 
-# 2013-12-10: version 1.8 (released)
-#             code refactoring
-#             Less call to globals/obvious params
-#             wikiLinks: if md link has no title and it's an existing file, use the filename as title 
-#             Book: warn if no output path (defaults to current dir) and source dir is the running one
-#             minor fixes
-#             remove object creation to get file properties -> now dict
-#             code refactoring, now using a class
-#             config dict takes precedence over args
-#
-# 2013-12-09: less calls to globals
-#             changes to args
-#             + processing messages
-#             no more tmp files
-#             + more tests
-#             modified test findH1
-#             change findH1 method
-#             Fix merging
-#             merge (HTML): now can parse metadata block and have toc for full document
-#             Book: include toc ONLY on selected file
-#             book: fix having title twice in file when declared with meta-block
-#             fix titles in book: add them, if not found add the filename (no ext)
-#
-# 2013-12-08: fixing nasty bugs
-#             Fix finding H1s
-#             code fixing / rewriting, less call to globals
-#             + config file support (ini without sections)
-#
-# 2013-12-06: Clean up code
-#             default config in dictionary
-#             minor fix for admonitions
-#             add simple tests / debug
-#             Finish admonition parsing
-#
-# 2013-12-05: version 1.5 (released)
-#             rewritten and to include cool stuff
-#             + admonition parsing
-#             + Abbreviations parsing markdown -> html
-#             + warning when book also have other output formatting & html
-#             + warning custom index with wiki links only for markdown
-#             + more formats for input and output
-#             fix: formats_to: no duplicates
-#             fix: --nav only for book
-#             fix: add html5 output default, can change to 'html'
-#             fix: when merging: add <title>
-#
-# 2013-11-10: Added: merge files in directory -> end up with one output
-#
-# 2013-07-25: CHG data dir path
-#
-# 2013-07-21: version 1.0
-#             Add folder (recursive) support
-#             Add pandy script: "wrapper" for Pandoc.
