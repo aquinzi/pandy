@@ -30,7 +30,7 @@
 	--highlight           Highlight style. 
 	--highlight-no        No highlight
 	--tpl FILE            Template file.
-	--toc, -t             include TOC
+	--toc                 include TOC
 	--depth               TOC depth.
 	--hide                e-mail obfuscation
 	--sections            Wrap sections in <sections>, attach identifiers instead of titles
@@ -40,8 +40,9 @@
 	As well as some of my own:
 	--flat                Don't keep folder structure
 	--book, -b            Make a book with navigation (next/prev) and index
-	--nav, -n             (For book) use titles in navigation
-	--navside             (For book) Make a sidebar with titles
+	--no-nav, -nn         (For book) disable navigation
+	--nav-title, -nt      (For book) use titles in navigation
+	--nav-side, -ns       (For book) Make a sidebar with titles
 	--config FILE         Use a configuration file (option=key values)
 
 	If you use markdown and convert to HTML, there're some goodies for you. You can have abbreviations, as PHP Markdown Extra:
@@ -121,7 +122,7 @@ import re
 # Cool stuff to include someday:
 # Enable/disble extensions from cli
 # custom css/js: --include-in-header
-#fix .ini boolean parsing
+
 MY_CONFIGS = {
 	'PANDOC_DATA_DIR' : "C:\\Program Files\\Pandoc",
 	#'TEMPLATE': 'github_sidebartitles.html',
@@ -133,7 +134,7 @@ MY_CONFIGS = {
 # ==== info & pandoc config ====
 # ==============================
 
-__version__ = "1.9"
+__version__ = "1.9.1"
 _MY_USAGE = ''' %(prog)s [source] [format_from] [format_to] [other options]
  
  [format_to] can be a list of formats; separated with spaces 
@@ -242,6 +243,7 @@ _DEFAULT_CONFIG = {
 	'MERGE': False,
 	'BOOK': False,
 	'FILE_INDEX': '',
+	'USE_NAV': True, 
 	'NAV_TITLE': False,  #For book, use title navigation
 	'NAV_SIDEBAR': False,  #For book, sidebar with titles
 
@@ -273,7 +275,8 @@ class Pandy(object):
 		excludeFiles = tuple()
 		if self.settings['FILE_INDEX']:
 			excludeFiles = (self.settings['FILE_INDEX'])
-				
+
+			
 		self.files = files_list(self.input, only_exts=onlyExts, exclude_files=excludeFiles)
 
 		self.format_from, self.format_to = check_synonyms(self.format_from, self.format_to)
@@ -678,7 +681,7 @@ class Pandy(object):
 		i = 0
 		while i < filesTotal:
 			newcommand = list(self.command)
-			file_current = self._singleFileProperties(self.files[i], newcommand, specials=True)
+			file_current = self._singleFileProperties(self.files[i], newcommand)
 
 			relative = path_relative_to(file_current['path_output'], self.output, True)
 			bookIndex += '<li><a href="' + relative + '">' + \
@@ -716,7 +719,10 @@ class Pandy(object):
 				                          file_previous['path_output'], file_previous['title'], 
 				                          file_next['path_output'], file_next['title'] )
 			#build new text
-			text_new = navigation + file_current['text'] + navigation
+			text_new = file_current['text']
+
+			if self.settings['USE_NAV']:
+				text_new = navigation + text_new + navigation 
 
 			newcommand += ['-t', 'html', '-o', file_current['path_output']]
 			
@@ -977,8 +983,11 @@ def get_ini(filepath, keys_upper=False):
 				value = value.replace('"', "")
 
 				#check for booleans, ints, lists
-				if value.lower() in ["true", "false"]:
-					value = bool(value)
+				if value.lower() in ("true", "false"):
+					if value.lower() == "true":
+						value = True
+					else:
+						value = False
 				elif value.isnumeric():
 					value = int(value)
 				elif value.startswith("[") and value.endswith("]"):
@@ -1341,13 +1350,14 @@ def get_args():
 	style.add_argument("--tpl", help="Template file. Can enter 'default' for pandoc's default.", metavar="FILE")
 
 	other = parser.add_argument_group(' other')
-	other.add_argument("--toc", "-t", help="include TOC", action='store_true')
+	other.add_argument("--toc", help="include TOC", action='store_true')
 	other.add_argument("--depth", help="TOC depth. Choices: 1, 2, 3, 4, 5, 6. Default: %(default)s", type=int, choices=[1, 2, 3, 4, 5, 6], default=_DEFAULT_CONFIG['TOC_DEPTH'], metavar="")
 	other.add_argument("--hide", action='store_true', help="e-mail obfuscation (default none, true = references)")
 	other.add_argument("--sections", action='store_true', help="Wrap sections in <sections>, attach identifiers instead of titles")
 
-	other.add_argument("--nav", "-n", help="(For book) use titles in navigation", action="store_true")
-	other.add_argument("--navside", help="(For book) Make a sidebar with titles", action="store_true")
+	other.add_argument("--no-nav", "-nn", help="(For book) disable navigation", action="store_true")
+	other.add_argument("--nav-title", "-nt", help="(For book) use titles in navigation", action="store_true")
+	other.add_argument("--nav-side", "-ns", help="(For book) Make a sidebar with titles", action="store_true")
 	other.add_argument("--config", help="Use a configuration file (option=key values)", metavar="FILE")
 
 	pandoc = parser.add_argument_group(' Pandoc')
@@ -1371,14 +1381,15 @@ def get_args():
 		'tpl': 'TEMPLATE',
 		'hide': 'EMAIL_HIDE',
 		'bib': 'BIBLIOGRAPHY',
-		'nav': 'NAV_TITLE',
+		'nav_title': 'NAV_TITLE',
 		'data_dir': 'PANDOC_DATA_DIR',
 		'html4': 'HTML_VER',
 		'header': 'FILE_HEADER',
 		'footer': 'FILE_FOOTER',
 		'index': 'FILE_INDEX',
 		'depth' : 'TOC_DEPTH',
-		'navside' : 'NAV_SIDEBAR',
+		'nav_side' : 'NAV_SIDEBAR',
+		'no_nav' : 'USE_NAV',
 		}
 
 	#just convert to uppercase
@@ -1415,7 +1426,7 @@ def prepare_args(arg_dict):
 	settings_final.update(arg_dict)
 
 	if settings_final['config'] and os.path.exists(settings_final['config']):
-		settings_file = get_ini(settings_final['config'])
+		settings_file = get_ini(settings_final['config'], True)
 
 		#join/update configs args with file. Config take precedence
 		settings_final.update(settings_file)
@@ -1425,7 +1436,7 @@ def prepare_args(arg_dict):
 
 	# Check option belonging, replace special keys, etc 
 	if settings_final['NAV_TITLE'] and not settings_final['BOOK']:
-		print("  --nav only works with book. Skipping that option")
+		print("  --nav-title only works with book. Skipping that option")
 		settings_final['NAV_TITLE'] = False
 
 	if settings_final['FILE_INDEX'] and not settings_final['BOOK']:
@@ -1471,6 +1482,10 @@ if __name__ == '__main__':
 
 # History (File Last Updated on $Date$ )
 
+# 2014-02-11: ini fixes
+#             option to hide navigation in book
+#             modify command options
+#             
 # 2014-02-11: version 1.9 (released)
 #             only python 3
 #             fixes for book
