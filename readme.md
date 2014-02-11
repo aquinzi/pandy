@@ -68,7 +68,8 @@ As well as some of my own:
 	--flat                Don't keep folder structure
 	--book, -b            Make a book with navigation (next/prev) and index
 	--nav, -n             (For book) use titles in navigation
-	--config FILE         Use a configuration file (option=key values)
+  --navside             (For book) Make a sidebar with titles
+  --config FILE         Use a configuration file (option=key values)
 
 If you use markdown and convert to HTML, there're some goodies for you. You can have abbreviations, as PHP Markdown Extra:
 
@@ -103,6 +104,15 @@ Specify the configuration file with ``--config`` (the extension doesn't matter, 
 
 History
 -----------
+
+### Version 1.9
+
+  * only python 3
+  * fixes for book
+  * prints file being converted
+  * Filter extensions for converting, only html (hardcoded)
+  * add titles in sidebar for navigation (``--navside``). Include ``$book_navigation$`` in your Pandoc template
+
 
 ### Version 1.8.1
 

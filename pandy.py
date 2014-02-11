@@ -1,6 +1,7 @@
-# "Wrapper" for Pandoc (python 2.7): pandy [file/folder] [from] [to] [other options]
-# -*- coding: utf-8 -*-
+#! python3
+# "Wrapper" for Pandoc (python 3): pandy [file/folder] [from] [to] [other options]
 
+# -*- coding: utf-8 -*-
 # tested for pandoc 1.12.3
 
 """
@@ -40,6 +41,7 @@
 	--flat                Don't keep folder structure
 	--book, -b            Make a book with navigation (next/prev) and index
 	--nav, -n             (For book) use titles in navigation
+	--navside             (For book) Make a sidebar with titles
 	--config FILE         Use a configuration file (option=key values)
 
 	If you use markdown and convert to HTML, there're some goodies for you. You can have abbreviations, as PHP Markdown Extra:
@@ -99,9 +101,14 @@
 		raw_html
 """
 
-from __future__ import print_function, unicode_literals
-import subprocess
+import sys
+
+if sys.version_info[0] < 3:
+	print(" Sorry, only python 3")
+	exit()
+
 import argparse
+import subprocess
 import sys
 import os
 import codecs
@@ -126,7 +133,7 @@ MY_CONFIGS = {
 # ==== info & pandoc config ====
 # ==============================
 
-__version__ = "1.8.2"
+__version__ = "1.9"
 _MY_USAGE = ''' %(prog)s [source] [format_from] [format_to] [other options]
  
  [format_to] can be a list of formats; separated with spaces 
@@ -146,7 +153,7 @@ _MY_DESCRIPTION = '''
  Choose the slide format with --slides. 
 '''
 
-_PY_VER = sys.version_info[0]
+
 
 # pandoc's formats. Filtered to remove some that will never be used (by me)
 # Includes some synonyms
@@ -263,9 +270,12 @@ class Pandy(object):
 		onlyExts = tuple()
 		if self.format_from == "html":
 			onlyExts = (".html", ".htm")
-		
-		
-		self.files = files_list(self.input, only_exts=onlyExts)
+
+		excludeFiles = tuple()
+		if self.settings['FILE_INDEX']:
+			excludeFiles = (self.settings['FILE_INDEX'])
+				
+		self.files = files_list(self.input, only_exts=onlyExts, exclude_files=excludeFiles)
 
 		self.format_from, self.format_to = check_synonyms(self.format_from, self.format_to)
 
@@ -275,7 +285,7 @@ class Pandy(object):
 
 		# Exclude: do not treat right now or already done
 		exclude = ("FORMAT_TO", "FORMAT_FROM", "SOURCE", "OUTPUT_PATH", 
-			"OUTPUT_FLAT", "MERGE", "SLIDES", "BOOK", "HTML_VER", "PANDOC" )
+			"OUTPUT_FLAT", "MERGE", "SLIDES", "BOOK", "HTML_VER", "PANDOC", "FILE_INDEX" )
 
 		# Add the options 
 		for key, val in self.settings.items():
@@ -348,11 +358,15 @@ class Pandy(object):
 
 		if not self.output:
 			return path_delExtension(filepath)
-	
+
+
 		if self.settings['OUTPUT_FLAT'] or (not self.settings['OUTPUT_FLAT'] and filepath == self.input):
 			return os.path.join(self.output, path_delExtension(path_getFilename(filepath)))
 		else:
 			return os.path.join(self.output, path_delExtension(filepath)[len(self.input) + 1:])
+
+
+
 
 	def _cmdFromToOut(self, way, markup, outputpath=None):
 		""" Create from/to/output (way param) command. returns the command (list)
@@ -506,8 +520,7 @@ class Pandy(object):
 		for line in text:
 			if "](file|" in line:
 				if line.find("[](file|") > -1: 
-					linkedFileName = line[line.find("[](file|") + 8 : line.find(")")]
-
+					linkedFileName = line[line.find("[](file|") + 8: line.find(")")]
 					if os.path.exists(linkedFileName):
 						title = futureTitle(linkedFileName)
 						if title: 
@@ -521,7 +534,8 @@ class Pandy(object):
 					line = line.replace("](file|", "](")
 
 				# finds the output link and replaces
-				outputPath = self._getOutputPath(linkedFileName) + ".html"
+				#outputPath = self._getOutputPath(linkedFileName) + ".html"
+				outputPath = path_delExtension(linkedFileName) + ".html"
 				line       = line.replace(linkedFileName, outputPath)
 			
 			elif "[](" in line:
@@ -686,7 +700,7 @@ class Pandy(object):
 			newcommand = list(self.command)
 
 			if self.settings['NAV_SIDEBAR']:
-				newcommand.append('--variable=book_navigation:'+str(self.listTitles))
+				newcommand.append('--variable=book_navigation:' + self.listTitles)
 			
 			# prepare prev, current and next files
 			if i == 0:
@@ -874,10 +888,12 @@ def save(path, text):
 	with cmd as outputFile:
 		outputFile.write(text)
 
-def files_get(path, only_exts=()):
+def files_get(path, only_exts=(), exclude_files=()):
 	""" Get a list of files in dir. Returns list 
+
 	:param:only_exts tuple to include only selected extensions (mainly for html pages saved
 		locally (which has folders > images ) )
+	:param:exclude_files tuple to exclude files, mainly to exclude custom index 
 	""" 
 
 	theFiles = list()
@@ -890,12 +906,17 @@ def files_get(path, only_exts=()):
 			for filename in files:
 				filePath = os.path.join(root, filename)
 
-				if os.path.exists(filePath) and filePath.endswith(only_exts):
-					theFiles.append(filePath)
+				if os.path.exists(filePath):
+					if only_exts and filePath.endswith(only_exts):
+						theFiles.append(filePath)
+					else:
+						if exclude_files and filePath in exclude_files:
+							continue
+						theFiles.append(filePath)
 
 	return theFiles	
 
-def files_list(path, only_exts=None):
+def files_list(path, only_exts=None, exclude_files=None):
 	"""Gets the files from the .list (returns list). If not a .list, calls files_get()"""
 
 	if path.endswith(".list"):
@@ -910,17 +931,14 @@ def files_list(path, only_exts=None):
 					fileList.append(line)
 		return fileList
 	
-	return files_get(path, only_exts)
+	return files_get(path, only_exts, exclude_files)
 
 def cmd_open_write(path, mode):
 	""" Create the open/write command according to python version 
 	mode is: 'r' for read and 'w' for write
 	"""
 
-	if _PY_VER == 3:
-		return open(path, mode, encoding='utf-8-sig')
-	else:
-		return codecs.open(path, mode, encoding='utf-8-sig')
+	return codecs.open(path, mode, encoding='utf-8-sig')
 
 def cmd_open_file(path):
 	""" Opens file and returns text """
@@ -1290,10 +1308,12 @@ def get_args():
 	parser = argparse.ArgumentParser(add_help=False, usage=_MY_USAGE, description=description,
 		                    formatter_class=argparse.RawTextHelpFormatter) 
 
+
 	required = parser.add_argument_group(' Required')
 	required.add_argument("source",      action=InputExist,   help="file, folder or a .list")
 	required.add_argument("format_from", action=ValueCorrect, help="Convert from this")
 	required.add_argument("format_to",   action=ValueCorrect, help="Convert to this (can be a list)", nargs='+')
+
 
 	option_file = parser.add_argument_group(' Options:\n\n file related')
 	option_file.add_argument("--output", "-o", help="Output folder", metavar="FOLDER")
@@ -1338,6 +1358,7 @@ def get_args():
 	nocateg = parser.add_argument_group(' Last but not least')
 	nocateg.add_argument("--help", "-h", help="show this help message and exit", action="help") 
 	nocateg.add_argument('--version', action='version', version='%(prog)s ' + __version__)
+
 	
 	arg_dict = vars(parser.parse_args())
 
@@ -1385,6 +1406,7 @@ def get_args():
 	settings_args['config'] = tmp
 
 	return settings_args
+
 	
 def prepare_args(arg_dict):
 	""" Prepares the args to a nice config dictionary. Also reads the --config file """
@@ -1450,6 +1472,10 @@ if __name__ == '__main__':
 
 # History (File Last Updated on $Date$ )
 
+# 2014-02-11: version 1.9 (released)
+#             only python 3
+#             fixes for book
+# 
 # 2014-01-30: prints file being converted
 #             Filter extensions for converting, only html (hardcoded)
 # 
@@ -1457,10 +1483,10 @@ if __name__ == '__main__':
 # 
 # 2014-01-21: version 1.8.1 (released)
 #             new syntax for admonition
-#             
+# 
 # 2013-12-10: version 1.8 (released)
 #             code refactoring
-#             Less call to globals/obvious params 
+#             Less call to globals/obvious params
 #             wikiLinks: if md link has no title and it's an existing file, use the filename as title 
 #             Book: warn if no output path (defaults to current dir) and source dir is the running one
 #             minor fixes
@@ -1470,8 +1496,8 @@ if __name__ == '__main__':
 #
 # 2013-12-09: less calls to globals
 #             changes to args
-#             + processing messages 
-#             no more tmp files 
+#             + processing messages
+#             no more tmp files
 #             + more tests
 #             modified test findH1
 #             change findH1 method
@@ -1498,7 +1524,7 @@ if __name__ == '__main__':
 #             + Abbreviations parsing markdown -> html
 #             + warning when book also have other output formatting & html
 #             + warning custom index with wiki links only for markdown
-#             + more formats for input and output            
+#             + more formats for input and output
 #             fix: formats_to: no duplicates
 #             fix: --nav only for book
 #             fix: add html5 output default, can change to 'html'
