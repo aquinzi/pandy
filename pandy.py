@@ -121,10 +121,10 @@ import re
 # Cool stuff to include someday:
 # Enable/disble extensions from cli
 # custom css/js: --include-in-header
-
+#fix .ini boolean parsing
 MY_CONFIGS = {
 	'PANDOC_DATA_DIR' : "C:\\Program Files\\Pandoc",
-	'TEMPLATE': 'github_sidebartitles.html',
+	#'TEMPLATE': 'github_sidebartitles.html',
 	'HIGHLIGHT': 'zenburn',
 }
 
@@ -265,7 +265,6 @@ class Pandy(object):
 		self.format_to   = config_dict['FORMAT_TO']
 		self.files       = []
 		self.command     = []
-
 
 		onlyExts = tuple()
 		if self.format_from == "html":
