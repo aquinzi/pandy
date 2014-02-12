@@ -462,7 +462,8 @@ class Pandy(object):
 
 		# get the body (this is to also have the metadata; otherwise, 
 		# with --standalone it gets the body but not header-block)
-		_, body, _ = minimum.split("body>")
+		#_, body, _ = minimum.split("body>")
+		body = minimum.split("body>")[1]
 		properties['text'] = body[0:len(body) - 2 ] # remove the </ part of tag	
 
 		# get <title> content
@@ -681,7 +682,7 @@ class Pandy(object):
 		i = 0
 		while i < filesTotal:
 			newcommand = list(self.command)
-			file_current = self._singleFileProperties(self.files[i], newcommand)
+			file_current = self._singleFileProperties(self.files[i], newcommand, True)
 
 			relative = path_relative_to(file_current['path_output'], self.output, True)
 			bookIndex += '<li><a href="' + relative + '">' + \
@@ -700,6 +701,7 @@ class Pandy(object):
 		i = 0
 		while i < filesTotal:
 			newcommand = list(self.command)
+			print (" Converting: " + path_getFilename(self.files[i]))
 
 			if self.settings['NAV_SIDEBAR']:
 				newcommand.append('--variable=book_navigation:' + self.listTitles)
@@ -708,7 +710,6 @@ class Pandy(object):
 			if i == 0:
 				file_previous = self._singleFileProperties("")
 
-			print (" Converting: " + path_getFilename(self.files[i]))
 			file_current = self._singleFileProperties(self.files[i], newcommand, specials=True)
 			
 			if (i + 1) < filesTotal:
