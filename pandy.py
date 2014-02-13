@@ -8,7 +8,6 @@
 # index shouldnt have toc
 # check if book is really for markdown only
 # if index (no .index.md) -> add toc too
-# if custom index has titile, use it as project title 
 # TOC wherever you want
 # prob split stuff instead of having one big file
 # Enable/disble extensions from cli
@@ -1080,20 +1079,30 @@ class Pandy():
 		index_file = self.settings['FILE_INDEX']
 		index_ouput = os.path.join(self.output, "index.html")
 		index_text = None 
+		index_title = "Index" 
 
 		if index_file and os.path.exists(index_file):
 
 			index_text = cmd_open_file(index_file)
 			index_text = index_text.splitlines()
+			index_props = self._singleFileProperties(index_file, self.command)
+			index_title = index_props['title']
 			
 			files_order = extractMdLinks(index_text, extension="md")
 
 			#order files
 			self.files = orderListFromList(self.files, files_order, 1)
-			self.files = list(set(self.files))
+			#del dups 
+			tmp = list()
+			for h in self.files:
+				if h not in tmp:
+					tmp.append(h)
+			
+			self.files = tmp
 
 		self._listChapters()
 		filesTotal = len(self.files)
+
 
 		i = 0
 		file_previous = self._singleFileProperties("")
@@ -1138,6 +1147,8 @@ class Pandy():
 			if self.settings['USE_NAV']:
 				newcommand.append('--variable=book_navigation:' + book_navigation)
 
+			newcommand.append('--variable=project-title:' + index_title)
+
 			file_current['text'] = run_subprocess(newcommand, True, text_new)
 		
 			file_previous = file_current
@@ -1152,11 +1163,13 @@ class Pandy():
 		if index_text:
 			index_text = parse_wikiLinks(index_text, pandoc_path=self.settings['PANDOC'], base_path=self.settings['OUTPUT_PATH'])
 			index_text = os.linesep.join(n for n in index_text)
+
 		else:
 			index_text = makeSidebar(self.listChapters)
 		
 		#index_cmd += ['-o', index_ouput, '--metadata=title:Index']
-		index_cmd += ['-o', index_ouput]
+		index_cmd += ['-o', index_ouput, '--metadata=title:' + index_title]
+		#index_cmd += ['-o', index_ouput]
 		run_subprocess(index_cmd, True, index_text)
 
 
