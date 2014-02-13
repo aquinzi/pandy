@@ -5,27 +5,11 @@
 # tested for pandoc 1.12.3
 
 
-# rewriting!
-# For book:
-# 		
-# 		basically, copy sphinx style: :)
-# 		
-# 	|  project > currentchapter            prev|next|index  |
-# 	|-------------------------------------------------------|
-# 	|  TOC curernt chapter |       text                     | 
-# 	| prev topic           |                                |
-# 	| next page            |                                |
-# 	|-------------------------------------------------------|
-# 	|  project > currentchapter            prev|next|index  |
-# 	
-# 	but mix with read the docs, navigation sidebar is:
-# 	       chapter1
-# 	       chapter2 <-------- active
-# 	           chapter 2 toc
-# 	       chapter3
-
-
 # change index file to automatically search for index.md
+# index should have toc
+# check duplicates from custom index (while adding them to process)
+# if index (no .index.md) -> add toc too
+# if custom index has titile, use it as project title 
 # TOC wherever you want
 # prob split stuff instead of having one big file
 # Enable/disble extensions from cli
@@ -796,6 +780,7 @@ def prepare_args(arg_dict):
 			del arg_dict[key]
 
 	settings_final.update(arg_dict)
+
 	
 
 	# Check option belonging, replace special keys, etc 
@@ -1116,40 +1101,35 @@ class Pandy():
 			if (i + 1) < filesTotal:
 				file_next = self._singleFileProperties(self.files[i + 1], newcommand, specials=True) 
 		
-			# book navigation
-			book_navigation = self._bookNavigation(file_current['path_output'], 
-				                          file_previous['path_output'], file_previous['title'], 
-				                          file_next['path_output'], file_next['title'] )
-
 
 			newcommand += ['-t', 'html', '-o', file_current['path_output']]
-			# "hack" to have the file or title in the title (but using --title-prefix instead 
-			# of --metadata=title:) so it doesnt print in body (and you won't notice 
-			# the - at the end, shut up)
-			newcommand.append('--title-prefix=' + file_current['title'])
-
 			path_mkdir(path_get(file_current['path_output']))
 
 			#build new text
 			text_new = file_current['text']
-			
+
 			# should be in another way, but too lazy
 			text_for_toc = "dfgdfg <body>" + text_new + "</body> dfghdkfjdhjkf"
-			current_toc, current_body = getSplitTocBody(text_for_toc)
-			current_toc = "<ul>" + current_toc + "</ul>"
+			current_toc, text_new = getSplitTocBody(text_for_toc)
+			current_toc = "<ul>" + current_toc + "</ul>"		
 
-			text_new = text_new.replace(current_toc, '')
+			# re add title (for <title> and first heading)
+			newcommand.append('--metadata=title:' + file_current['title'])
 
+			# navigations
+			book_navigation = self._bookNavigation(file_current['path_output'], 
+				                          file_previous['path_output'], file_previous['title'], 
+				                          file_next['path_output'], file_next['title'] )
 
 			#sidebar navigation
 			sidebar_navigation = makeSidebar(self.listChapters, file_current['title'], current_toc)
 
-			if self.settings['NAV_SIDEBAR']:
-				newcommand.append('--variable=book_navigation:' + sidebar_navigation)
 
+			if self.settings['NAV_SIDEBAR']:
+				newcommand.append('--variable=side_navigation:' + sidebar_navigation)
 
 			if self.settings['USE_NAV']:
-				text_new = book_navigation + text_new + book_navigation 
+				newcommand.append('--variable=book_navigation:' + book_navigation)
 
 			file_current['text'] = run_subprocess(newcommand, True, text_new)
 		
@@ -1334,7 +1314,7 @@ def makeSidebar(links, title_active=None, toc_active=''):
 
 		sidebar += li
 
-	return sidebar 
+	return "<ul>\n" + sidebar + "</ul>"
 
 
 
