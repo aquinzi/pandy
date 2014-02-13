@@ -7,6 +7,7 @@
 
 # check if book is really for markdown only
 # if index (no .index.md) -> add toc too
+# option to exclude toc from sidebar navigation
 # TOC wherever you want
 # prob split stuff instead of having one big file
 # Enable/disble extensions from cli
@@ -127,7 +128,7 @@ _DEFAULT_CONFIG = {
 	
 	'MERGE': False,
 	'BOOK': False,
-	'FILE_INDEX': 'index.md',
+	'FILE_INDEX': '',
 	'USE_NAV': True, 
 	'NAV_TITLE': False,  #For book, use title navigation
 	'NAV_SIDEBAR': False,  #For book, sidebar with titles
@@ -574,11 +575,10 @@ def find_TOCinFile(text, placeholder, replace_with='<!-- TOCatized -->'):
 
 	return False, text 
 
-def parse_wikiLinks(text, pandoc_path, base_path=None):
+def parse_wikiLinks(text, pandoc_path):
 	""" Process "wiki" links: [](file.md) to [file title](newpath.html).
 	It must be a markdown file, opened before (list)
 
-	:base_path    base path to search in when finding title html
 	"""
 
 	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
@@ -591,9 +591,6 @@ def parse_wikiLinks(text, pandoc_path, base_path=None):
 		link_new = path_delExtension(link[1]) + ".html"
 		future_path = link_new
 		
-		if base_path:
-			future_path = os.path.join(base_path, link_new)
-
 		title_new = link[0]
 		if not title_new: 
 			if os.path.exists(future_path):
@@ -1074,71 +1071,90 @@ class Pandy():
 	def _parseBook(self):
 		"""Make a book with navigation between files """
 
+		# to get properties for all files
+		db_files = list()
+
 		# if we have a navigation file, have that as the file order
 		index_file = self.settings['FILE_INDEX']
-		index_ouput = os.path.join(self.output, "index.html")
-		index_text = None 
-		index_title = "Index" 
+
+		db_files.append({
+			'title': "Index",
+			'toc': '', 
+			'path_output' : os.path.join(self.output, "index.html"),
+			'path_input' : "noindex.",
+			'text' : '',
+			})
 
 		if index_file and os.path.exists(index_file):
 
 			index_text = cmd_open_file(index_file)
 			index_text = index_text.splitlines()
-			index_props = self._singleFileProperties(index_file, self.command)
-			index_title = index_props['title']
-			
+			index_props = self._singleFileProperties(index_file, self.command, specials=True)
+
+			db_files[0]['title']      = index_props['title']
+			db_files[0]['path_input'] = index_file
+			db_files[0]['text']       = index_text
+
 			files_order = extractMdLinks(index_text, extension="md")
 
 			#order files
 			self.files = orderListFromList(self.files, files_order, 1)
+			
 			#del dups 
 			tmp = list()
-			for h in self.files:
-				if h not in tmp:
-					tmp.append(h)
-			
+			tmp = [h for h in self.files if h not in tmp]
 			self.files = tmp
 
 		self._listChapters()
-		filesTotal = len(self.files)
 
+		# get other files properties
+		for picked in self.files:
+			print (" Converting: " + path_getFilename(picked))
 
-		i = 0
-		file_previous = self._singleFileProperties("")
-		while i < filesTotal:
-			
-			newcommand = list(self.command)
-			print (" Converting: " + path_getFilename(self.files[i]))
-			
-			# prepare prev, current and next files
-			file_current = self._singleFileProperties(self.files[i], newcommand, specials=True)
-			
-			if (i + 1) < filesTotal:
-				file_next = self._singleFileProperties(self.files[i + 1], newcommand, specials=True) 
-		
-
-			newcommand += ['-t', 'html', '-o', file_current['path_output']]
-			path_mkdir(path_get(file_current['path_output']))
-
-			#build new text
-			text_new = file_current['text']
+			props = self._singleFileProperties(picked, self.command, specials=True)
 
 			# should be in another way, but too lazy
-			text_for_toc = "dfgdfg <body>" + text_new + "</body> dfghdkfjdhjkf"
-			current_toc, text_new = getSplitTocBody(text_for_toc)
-			current_toc = "<ul>" + current_toc + "</ul>"		
+			text_for_toc = "dfgdfg <body>" + props['text'] + "</body> dfghdkfjdhjkf"
+			current_toc, props['text'] = getSplitTocBody(text_for_toc)
+			props['toc'] = "<ul>" + current_toc + "</ul>"
+
+			db_files.append(props)
+
+
+		filesTotal = len(self.files)
+		# processing, ommiting index 
+		for i in range(1, filesTotal):
+
+			current = db_files[i]
+			prev = db_files[i - 1]
+
+			try:
+				db_files[i + 1]
+			except IndexError:
+				nextt = dict() 
+				nextt['path_output'] = ""
+				nextt['title']       = ""
+			else:
+				nextt = db_files[i + 1]
+
+			newcommand = list(self.command)
+			newcommand += ['-t', 'html', '-o', current['path_output']]
+
+			path_mkdir(path_get(current['path_output']))
 
 			# re add title (for <title> and first heading)
-			newcommand.append('--metadata=title:' + file_current['title'])
+			newcommand.append('--metadata=title:' + current['title'])
 
 			# navigations
-			book_navigation = self._bookNavigation(file_current['path_output'], 
-				                          file_previous['path_output'], file_previous['title'], 
-				                          file_next['path_output'], file_next['title'] )
+			if 'index.' in prev['path_input']:
+				prev = dict()
+				prev['path_output'] = ""
+				prev['title'] = ""
 
-			#sidebar navigation
-			sidebar_navigation = makeSidebar(self.listChapters, file_current['title'], current_toc)
-
+			book_navigation = self._bookNavigation(current['path_output'], 
+				                          prev['path_output'], prev['title'], 
+				                          nextt['path_output'], nextt['title'])
+			sidebar_navigation = makeSidebar(self.listChapters, current['title'], current['toc'])
 
 			if self.settings['NAV_SIDEBAR']:
 				newcommand.append('--variable=side_navigation:' + sidebar_navigation)
@@ -1146,33 +1162,29 @@ class Pandy():
 			if self.settings['USE_NAV']:
 				newcommand.append('--variable=book_navigation:' + book_navigation)
 
-			newcommand.append('--variable=project-title:' + index_title)
+			newcommand.append('--variable=project-title:' + db_files[0]['title'])
 
-			file_current['text'] = run_subprocess(newcommand, True, text_new)
-		
-			file_previous = file_current
-			file_current  = file_next
-			file_next     = self._singleFileProperties("")
+			run_subprocess(newcommand, True, current['text'])
 
-			i += 1
 
-		
-		# finish index
+		# finish index 
 		index_cmd = list(self.command)
 		if "--toc" in index_cmd:
 			index_cmd.remove("--toc")
-
-		if index_text:
-			index_text = parse_wikiLinks(index_text, pandoc_path=self.settings['PANDOC'], base_path=self.settings['OUTPUT_PATH'])
-			index_text = os.linesep.join(n for n in index_text)
+		
+		if db_files[0]['text']:
+			db_files[0]['text'] = parse_wikiLinks(db_files[0]['text'], 
+				                  pandoc_path=self.settings['PANDOC'])
+			db_files[0]['text'] = os.linesep.join(n for n in db_files[0]['text'])
+			pass
 
 		else:
-			index_text = makeSidebar(self.listChapters)
+			db_files[0]['text'] = makeSidebar(self.listChapters)
+
+		index_cmd += ['-o', db_files[0]['path_output'], '--metadata=title:' + db_files[0]['title']]
+		run_subprocess(index_cmd, True, db_files[0]['text'])
 		
-		#index_cmd += ['-o', index_ouput, '--metadata=title:Index']
-		index_cmd += ['-o', index_ouput, '--metadata=title:' + index_title]
-		#index_cmd += ['-o', index_ouput]
-		run_subprocess(index_cmd, True, index_text)
+
 
 
 	def _getOutputPath(self, filepath):
@@ -1191,7 +1203,7 @@ class Pandy():
 		output path, input path, title and text. Does the file processing and gets the title and html
 
 		cmd: the command as starting point 
-		specials: check for abbreviations, admonitions, toc 
+		specials: check for abbreviations, admonitions, toc, wikilinks
 		"""
 
 		#sketch
