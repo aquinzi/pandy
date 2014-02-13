@@ -6,7 +6,6 @@
 
 
 # check if book is really for markdown only
-# if index (no .index.md) -> add toc too
 # option to exclude toc from sidebar navigation
 # TOC wherever you want
 # prob split stuff instead of having one big file
@@ -1073,10 +1072,6 @@ class Pandy():
 
 		# to get properties for all files
 		db_files = list()
-
-		# if we have a navigation file, have that as the file order
-		index_file = self.settings['FILE_INDEX']
-
 		db_files.append({
 			'title': "Index",
 			'toc': '', 
@@ -1085,31 +1080,33 @@ class Pandy():
 			'text' : '',
 			})
 
+		# if we have a navigation file, have that as the file order
+		index_file = self.settings['FILE_INDEX']
 		if index_file and os.path.exists(index_file):
-
-			index_text = cmd_open_file(index_file)
-			index_text = index_text.splitlines()
-			index_props = self._singleFileProperties(index_file, self.command, specials=True)
-
-			db_files[0]['title']      = index_props['title']
-			db_files[0]['path_input'] = index_file
-			db_files[0]['text']       = index_text
-
+			index_text = cmd_open_file(index_file).splitlines()
 			files_order = extractMdLinks(index_text, extension="md")
-
-			#order files
 			self.files = orderListFromList(self.files, files_order, 1)
 			
 			#del dups 
 			tmp = list()
-			tmp = [h for h in self.files if h not in tmp]
+			[tmp.append(h) for h in self.files if h not in tmp]
+
 			self.files = tmp
+		else:
+			index_file = "noindex."
 
 		self._listChapters()
 
+		tmp = list(self.files) 
+		tmp.append(index_file)
+
 		# get other files properties
-		for picked in self.files:
-			print (" Converting: " + path_getFilename(picked))
+		for picked in tmp:
+			if not os.path.exists(picked):
+				continue
+
+			if not 'index.' in picked.lower():
+				print (" Converting: " + path_getFilename(picked))
 
 			props = self._singleFileProperties(picked, self.command, specials=True)
 
@@ -1118,10 +1115,13 @@ class Pandy():
 			current_toc, props['text'] = getSplitTocBody(text_for_toc)
 			props['toc'] = "<ul>" + current_toc + "</ul>"
 
-			db_files.append(props)
+			if 'index.' in picked.lower():
+				db_files[0].update(props)
+			else:
+				db_files.append(props)
 
 
-		filesTotal = len(self.files)
+		filesTotal = len(db_files)
 		# processing, ommiting index 
 		for i in range(1, filesTotal):
 
@@ -1154,7 +1154,8 @@ class Pandy():
 			book_navigation = self._bookNavigation(current['path_output'], 
 				                          prev['path_output'], prev['title'], 
 				                          nextt['path_output'], nextt['title'])
-			sidebar_navigation = makeSidebar(self.listChapters, current['title'], current['toc'])
+			sidebar_navigation = makeNavigationLinks(self.listChapters, 
+				                  title_active=current['title'], toc_active=current['toc'])
 
 			if self.settings['NAV_SIDEBAR']:
 				newcommand.append('--variable=side_navigation:' + sidebar_navigation)
@@ -1171,15 +1172,9 @@ class Pandy():
 		index_cmd = list(self.command)
 		if "--toc" in index_cmd:
 			index_cmd.remove("--toc")
-		
-		if db_files[0]['text']:
-			db_files[0]['text'] = parse_wikiLinks(db_files[0]['text'], 
-				                  pandoc_path=self.settings['PANDOC'])
-			db_files[0]['text'] = os.linesep.join(n for n in db_files[0]['text'])
-			pass
 
-		else:
-			db_files[0]['text'] = makeSidebar(self.listChapters)
+		if not db_files[0]['text']:
+			db_files[0]['text'] = makeNavigationLinks(self.listChapters, files_tocs=db_files[1:])
 
 		index_cmd += ['-o', db_files[0]['path_output'], '--metadata=title:' + db_files[0]['title']]
 		run_subprocess(index_cmd, True, db_files[0]['text'])
@@ -1306,35 +1301,47 @@ class Pandy():
 		self.listChapters = tmp_list
 
 
-def makeSidebar(links, title_active=None, toc_active=''):
-	"""make the sidebar navigation with selected title and toc
+def makeNavigationLinks(links, title_active=None, toc_active='', files_tocs=None):
+	"""make the whole book navigation: 
+
 	:links   a nested list (or tuple) as title, href
 	:title_selected    item to apply active class and insert toc 
-	:toc_selected      toc for selected item
+	:toc_active      toc for selected item
+	:files_tocs      all the tocs from project, for index 
 	"""
 
-	sidebar = ""
+	final = ""
 	anchor_tpl = '<a href="{href}">{title}</a>'
 
 	for link in links:
 		title = link[0]
 		href = link[1]
 		anchor = anchor_tpl.format(href=href, title=title)
+		
+		info_active = ""
+		info_toc = ""
+
+		#sidebar 
+		if title_active is not None and toc_active:
+			if title == title_active:
+				info_active = " class='active'"
+				info_toc = toc_active
+		
+		#index 
+		if files_tocs:
+			for findtoc in files_tocs:
+				if path_getFilename(findtoc['path_output']) == href:
+					#fix links so they point to page 
+					info_toc = findtoc['toc'].replace('<a href="#', '<a href="' + href + "#")
+
+					break
 
 		li = "<li{active}>" + anchor + "{toc}</li>\n"
+		li = li.format(active=info_active, toc=info_toc)
+		
+		final += li
 
-		if title_active is not None and title == title_active:
-			li = li.format(active=" class='active'", toc=toc_active)
-		else:
-			li = li.format(active="", toc='')
-
-
-		sidebar += li
-
-	return "<ul>\n" + sidebar + "</ul>"
-
-
-
+	return "<ul>\n" + final + "</ul>"
 
 def getSplitTocBody(html):
 	"""Returns the TOC list and the rest of the html body.
@@ -1342,11 +1349,13 @@ def getSplitTocBody(html):
 	"""
 
 	text = htmlSplitter(html, 'body')
+
+	if not '<div id="TOC">' in text:
+		return '', text 
+	
 	text = text.split('<div id="TOC">')[1]
 	text_parts = text.split('</div>')
-
 	body = text_parts[1]
-	
 	toc = text_parts[0]
 	toc = toc.splitlines()
 	toc = [line for line in toc if line]
