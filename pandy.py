@@ -5,7 +5,6 @@
 # tested for pandoc 1.12.3
 
 
-# index shouldnt have toc
 # check if book is really for markdown only
 # if index (no .index.md) -> add toc too
 # TOC wherever you want
@@ -1160,6 +1159,9 @@ class Pandy():
 		
 		# finish index
 		index_cmd = list(self.command)
+		if "--toc" in index_cmd:
+			index_cmd.remove("--toc")
+
 		if index_text:
 			index_text = parse_wikiLinks(index_text, pandoc_path=self.settings['PANDOC'], base_path=self.settings['OUTPUT_PATH'])
 			index_text = os.linesep.join(n for n in index_text)
