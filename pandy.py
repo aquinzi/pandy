@@ -138,55 +138,6 @@ _DEFAULT_CONFIG = {
 # for wiki links mostly
 ACCEPTED_MD_EXTENSIONS = ('md', 'txt', 'mdown', 'markdown')
 
-# =========================
-# == methods: prettify ====
-# =========================
-
-def help_replaceStringFormats(string, placeholders):
-	"""Replaces placeholders in string, with _FORMATS_BOTHWAYS and _FORMATS_OUTPUT
-	
-	string      : complete string 
-	placeholders: list of placeholders; what to replace -> converts to list to join
-
-	returns processed string 
-	"""
-
-	tmp = ""
-
-	for placeholder in placeholders:
-
-		# get the list name
-		the_choosen_one = placeholder[3:len(placeholder) - 3] 
-
-		if the_choosen_one == "_FORMATS_OUTPUT":
-			the_list = _FORMATS_OUTPUT
-		else:
-			the_list = _FORMATS_BOTHWAYS
-
-		is_synom = False
-		
-		for item in the_list:
-
-			if the_choosen_one == "_FORMATS_OUTPUT":
-				is_synom = True if item in ["doc", "opendoc", "slide"] else False 
-
-			if the_choosen_one == "_FORMATS_BOTHWAYS":
-				if item.startswith("md"):
-					continue 
-
-				is_synom = True if item == 'md' else False 
-
-			if is_synom:
-				tmp += " (or " + item + ")"
-			else:
-				tmp += ", " + item
-
-		tmp = tmp[2:] # delete fist ", "
-		string = string.replace(placeholder, tmp)
-		tmp = ""
-
-	return string
-
 # =======================
 # == methods: system ====
 # =======================
@@ -434,25 +385,36 @@ def check_synonyms(format_from, format_to):
 # == methods: special parsing ====
 # ================================
 
-def if_special_elements(file_path, toc_tag, pandoc_path=None):
+def if_special_elements_open(file_path, toc_tag):
 	"""open file (file_path) and process trough specials 
-	(admonitions, abbreviations, TOC tag, wikilinks)
-	:pandoc_path  include pandoc path, if None wikilinks will be skipped
+	(admonitions, abbreviations, TOC tag, internallinks)
 	returns: text (regardless if changed or not ) and hasTOC (bool)
 	"""
 	
 	with cmd_open_write(file_path, 'r') as input_file:
 		text_list = input_file.readlines()
 
-		hasTOC, text = find_TOCinFile(text_list, toc_tag)
-		text = parse_admonitions(text)
-		text = parse_abbreviations(text)
-		if pandoc_path:
-			text = parse_wikiLinks(text, pandoc_path)
-
+	text, hasTOC = if_special_elements(text_list, toc_tag)
 	new_text = "".join(text)
 
 	return new_text, hasTOC
+
+
+
+def if_special_elements(text, toc_tag):
+	"""read text (as list) and process trough specials 
+	(admonitions, abbreviations, TOC tag, internallinks)
+	returns: text (as list) and hasTOC (bool)
+	"""
+	
+	hasTOC, text = find_TOCinFile(text, toc_tag)
+	text = parse_admonitions(text)
+	text = parse_abbreviations(text)
+	text = parse_internalLinks(text)
+
+	return text, hasTOC
+
+
 
 def parse_abbreviations(text):
 	""" Find if file has abbreviations, if it does: parse as HTML. 
@@ -571,10 +533,13 @@ def find_TOCinFile(text, placeholder, replace_with='<!-- TOCatized -->'):
 
 	return False, text 
 
-def parse_wikiLinks(text, pandoc_path):
-	""" Process "wiki" links: [](file.md) to [file title](newpath.html).
-	It must be a markdown file, opened before (list)
+def parse_internalLinks(text):
+	""" Process "internal links": [nicetitle](file.md) to [nicetitle](file.html)
+	Markdown file opened before as list  
+	return  text 
+	No guessing of title
 
+	ex: wikilinks
 	"""
 
 	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
@@ -582,17 +547,9 @@ def parse_wikiLinks(text, pandoc_path):
 	# harvest all links first 
 	links = extractMdLinks(text, extension=extensions)
 
-	#find real title and output
 	for link in links:
 		link_new = path_delExtension(link[1]) + ".html"
-		future_path = link_new
-		
 		title_new = link[0]
-		if not title_new: 
-			if os.path.exists(future_path):
-				title_new = findTitleHtml(future_path, pandocpath=pandoc_path, continueh1=True)
-			else:
-				title_new = path_delExtension(link[1])
 
 		link.append(title_new)
 		link.append(link_new)
@@ -607,9 +564,156 @@ def parse_wikiLinks(text, pandoc_path):
 
 		textNew = textNew.replace(find_me, replace_me)
 
-	textNew = textNew.split("<<<<SPLITMEOVERHERE>>>>")
+	return textNew.split("<<<<SPLITMEOVERHERE>>>>")
 	
-	return textNew
+def parse_wikilinks(text, list_files):
+	"""Parse wikilinks (reference links but inverted): [filename][title]
+	[filename] can have extension or not. [title] is optional. If blank: searches title 
+
+	:text   text as list 
+	:list_files  list of files to search metadata in 
+
+	return processed text (as list) and references (string)
+	"""
+
+	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
+	links = extractMdLinks(text, extension=extensions, referencestyle=True)
+
+	references = ""
+	ref_tpl = "[{thefile}]: {future_html}\n"
+	
+	#hold filename, title_old and title_new. For later text replacement
+	new_links = list()   
+
+	for link in links:
+		filename = link[0]
+		title    = link[1]
+		future_path   = ""
+		future_title   = ""
+
+		# find output and title
+		for thisfile in list_files:
+			if filename in thisfile['path_input']:
+				future_path = thisfile['path_output']
+				if title:
+					future_title = title
+					break
+				if thisfile['title']:
+					future_title = thisfile['title']
+					break 
+				# find title
+				#      can parse here (singlefileprop)
+				#      or use findhtmltitle()
+				future_title = whateverresult
+
+		# create ref
+		tmp = ref_tpl.format(thisfile=filename, future_html=future_path)
+		references += tmp 
+
+		new_links.append([filename, title, future_title])
+
+	# replace in text 
+	new_text = list()
+	newtext = "<<<<SPLITMEOVERHERE>>>>".join(text)
+	search_tpl = "[{filename}][{title}]"
+	replace_tpl = "[{title}][{filename}]"
+
+	for link in new_links:
+		filename = link[0]
+		title_old = link[1]
+		title_new = link[2]
+		newtext = newtext.replace(
+			search_tpl.format(filename=filename, title=title_old), 
+			replace_tpl.format(filename=filename, title=title_new))
+
+	newtext = newtext.split("<<<<SPLITMEOVERHERE>>>>")
+
+	return newtext, references	
+
+
+
+
+
+def makeNavigationLinks(links, title_active=None, toc_active='', files_tocs=None):
+	"""make the whole book navigation: 
+
+	:links   a nested list (or tuple) as title, href
+	:title_selected    item to apply active class and insert toc 
+	:toc_active      toc for selected item
+	:files_tocs      all the tocs from project, for index 
+	"""
+
+	final = ""
+	anchor_tpl = '<a href="{href}">{title}</a>'
+
+	for link in links:
+		title = link[0]
+		href = link[1]
+		anchor = anchor_tpl.format(href=href, title=title)
+		
+		info_active = ""
+		info_toc = ""
+
+		#sidebar 
+		if title_active is not None:
+			if title == title_active:
+				info_active = " class='active'"
+				info_toc = toc_active
+		
+		#index 
+		if files_tocs:
+			for findtoc in files_tocs:
+				if path_getFilename(findtoc['path_output']) == href:
+					#fix links so they point to page 
+					info_toc = findtoc['toc'].replace('<a href="#', '<a href="' + href + "#")
+
+					break
+
+		li = "<li{active}>" + anchor + "{toc}</li>\n"
+		li = li.format(active=info_active, toc=info_toc)
+		
+		final += li
+
+	return "<ul>\n" + final + "</ul>"
+
+def extractMdLinks(text, extension="md", referencestyle=False):
+	"""Extract markdown links in text with extension. 
+	:text list 
+	:extension the allowed extension
+	:referencestyle    for [][] links 
+	:return a nested list. 
+	             normal: holder(title, link)
+	             reference: holder(file, title)
+	"""
+
+	list_links = list()
+
+	expr_normal = "\[(.+?)?\]\((.+?\.(" + extension + "))\)"
+	expr_reference = "\[(.+?[\.(" + extension + ")]?)\]\[(.+?)?\]"
+
+	if referencestyle:
+		expr = r'' + expr_reference
+	else:
+		expr = r'' + expr_normal
+
+	for line in text:
+		matches = re.findall(expr, line)
+		for m in matches:
+			title = m[0]
+			link  = m[1]
+			if [title, link] not in list_links:
+				list_links.append([title, link])
+
+	return list_links
+
+def findTitleMd(filepath):
+	with cmd_open_write(filepath, 'r') as lalal:
+		this_title = ""
+		for line in lalal:
+			if line.startswith("% ") or line.startswith("title: ") or line.startswith("# "):
+				this_title = line  
+				return this_title
+		return filepath
 
 
 # =============================
@@ -808,6 +912,161 @@ def prepare_args(arg_dict):
 
 	return settings_final
 
+# =================================
+# == Html stuff: shouldn't be... ==
+# =================================
+
+def htmlSplitter(text, tag, special_start=None, find=False):
+	
+	tpl_start = "<" + tag + ">"
+	if special_start:
+		tpl_start = special_start
+
+	tpl_end = "</" + tag + ">"
+
+	splitting = text.split(tpl_start)
+	if find:
+		if len(splitting) <= 1:
+			return None 
+
+	return splitting[1].split(tpl_end)[0]
+
+def findTitleHtml(filepath=None, pandocpath=None, text_md=None, text_html=None, continueh1=False):
+	"""Find the title in HTML. First with <title>, then first <h1>"""
+
+	the_title = ""
+	if not filepath and text_md is None and text_html is None:
+		# how do you me want to work!?!?!
+		return the_title
+
+	if filepath:
+		the_title = path_delExtension(path_getFilename(filepath))
+
+	if pandocpath is None and text_md is None and text_html is None:
+		#why did you even bother....
+		return the_title
+
+	if text_html is None and text_md is None and filepath is None:
+		# I dont do magic 
+		return the_title
+
+	if text_html is None:
+		if text_md is None:
+			text_md = cmd_open_file(filepath)
+
+		if not filepath.endswith(".html"):
+			print(",mdfgdfgdflgdfkj ")
+			
+			command = [pandocpath, '--standalone', '-t', 'html']
+			text_html = run_subprocess(command, True, text_md)
+			text_html = str(text_html, encoding='utf8')
+		else:
+			text_html = text_md
+
+	html_pieces = text_html.split("<body>")
+	title_html = html_pieces[0].split("<title>")[1].strip()
+	title_html = title_html.split("</title>")[0].replace(os.linesep, '')
+
+	if title_html:
+		return title_html
+
+	if continueh1:
+		title_h1 = htmlSplitter(html_pieces[1], "h1", special_start="<h1 ", find=True)
+		if not title_h1:
+			return the_title
+
+		return title_h1.split(">")[1]
+
+	return the_title
+
+def getSplitTocBody(html):
+	"""Returns the TOC list and the rest of the html body.
+	(splitting from <body>)
+	"""
+
+	text = htmlSplitter(html, 'body')
+
+	if not '<div id="TOC">' in text:
+		return '', text.split('</div>')[1]
+	
+	text = text.split('<div id="TOC">')[1]
+	text_parts = text.split('</div>')
+	body = text_parts[1]
+	toc = text_parts[0]
+	toc = toc.splitlines()
+	toc = [line for line in toc if line]
+	toc = toc[1:-1] # remove first <ul> and last </ul>
+	toc = "".join(toc)
+
+	return toc, body
+
+# ============
+# == Misc ====
+# ============
+
+def orderListFromList(orderthis, fromthis, bythiscol):
+	"""Order a list, based on another by value. 
+	:orderthis    list to be ordered 
+	:fromthis     new order list 
+	:bythiscol    "column" number to order by this value set 
+	"""
+
+	tmp_list = list()
+
+
+	for new_order in fromthis:
+		for index, item in enumerate(orderthis):
+			#we trust the user that will be no files with same name
+			if new_order[bythiscol] in item:
+				tmp_list.append(item)
+				break 
+
+	return tmp_list
+
+def help_replaceStringFormats(string, placeholders):
+	"""Replaces placeholders in string, with _FORMATS_BOTHWAYS and _FORMATS_OUTPUT
+	
+	string      : complete string 
+	placeholders: list of placeholders; what to replace -> converts to list to join
+
+	returns processed string 
+	"""
+
+	tmp = ""
+
+	for placeholder in placeholders:
+
+		# get the list name
+		the_choosen_one = placeholder[3:len(placeholder) - 3] 
+
+		if the_choosen_one == "_FORMATS_OUTPUT":
+			the_list = _FORMATS_OUTPUT
+		else:
+			the_list = _FORMATS_BOTHWAYS
+
+		is_synom = False
+		
+		for item in the_list:
+
+			if the_choosen_one == "_FORMATS_OUTPUT":
+				is_synom = True if item in ["doc", "opendoc", "slide"] else False 
+
+			if the_choosen_one == "_FORMATS_BOTHWAYS":
+				if item.startswith("md"):
+					continue 
+
+				is_synom = True if item == 'md' else False 
+
+			if is_synom:
+				tmp += " (or " + item + ")"
+			else:
+				tmp += ", " + item
+
+		tmp = tmp[2:] # delete fist ", "
+		string = string.replace(placeholder, tmp)
+		tmp = ""
+
+	return string
 
 # ==============
 # == Pandy! ====
@@ -844,7 +1103,6 @@ class Pandy():
 				del self.files[i]
 				break 
 			i += 1
-
 
 		self.format_from, self.format_to = check_synonyms(self.format_from, self.format_to)
 
@@ -971,7 +1229,7 @@ class Pandy():
 					is_from = [filey] 
 				else:
 					stdin = True 
-					is_from, toc = if_special_elements(filey, self.settings['TOC_TAG'])
+					is_from, toc = if_special_elements_open(filey, self.settings['TOC_TAG'])
 
 					if toc and not "--toc" in newcommand:
 						newcommand.append('--toc')
@@ -1042,7 +1300,7 @@ class Pandy():
 
 				for thisFile in self.files:
 					
-					new_text, toc = if_special_elements(thisFile, self.settings['TOC_TAG'])		
+					new_text, toc = if_special_elements_open(thisFile, self.settings['TOC_TAG'])		
 					new_text = run_subprocess(command_base, True, new_text)
 
 					if not wasTOC:
@@ -1068,19 +1326,11 @@ class Pandy():
 				newcommand = command_base + cmd_out + [meta_name]
 				run_subprocess(newcommand, True, merged_files)
 
-
 	def _parseBook(self):
 		"""Make a book with navigation between files """
 
 		# to get properties for all files
-		db_files = list()
-		db_files.append({
-			'title': "Index",
-			'toc': '', 
-			'path_output' : os.path.join(self.output, "index.html"),
-			'path_input' : "noindex.",
-			'text' : '',
-			})
+		self.db_files = dict()
 
 		# if we have a navigation file, have that as the file order
 		index_file = self.settings['FILE_INDEX']
@@ -1097,6 +1347,15 @@ class Pandy():
 		else:
 			index_file = "noindex."
 
+		self.db_files['index'] = dict()
+		self.db_files['index'] = {
+			'title': "Index",
+			'toc': '', 
+			'path_output' : os.path.join(self.output, "index.html"),
+			'path_input' :index_file,
+			'text' : '',		
+		}
+
 		self._listChapters()
 
 		tmp = list(self.files) 
@@ -1108,41 +1367,51 @@ class Pandy():
 				continue
 
 			if not 'index.' in picked.lower():
-				print (" Converting: " + path_getFilename(picked))
+				print (" Processing: " + path_getFilename(picked))
 
 			props = self._singleFileProperties(picked, self.command, specials=True)
+			props['toc'] = ""
 
 			# should be in another way, but too lazy
 			text_for_toc = "dfgdfg <body>" + props['text'] + "</body> dfghdkfjdhjkf"
 			current_toc, props['text'] = getSplitTocBody(text_for_toc)
-			
 
 			if current_toc:
 				props['toc'] = "<ul>" + current_toc + "</ul>"
-			else:
-				props['toc'] = ""
 
 			if 'index.' in picked.lower():
-				db_files[0].update(props)
+				self.db_files['index'].update(props)
 			else:
-				db_files.append(props)
+				self.db_files[picked] = props
 
 
-		filesTotal = len(db_files)
-		# processing, ommiting index 
-		for i in range(1, filesTotal):
 
-			current = db_files[i]
-			prev = db_files[i - 1]
+		# process index 
+		index_cmd = list(self.command)
+		if "--toc" in index_cmd:
+			index_cmd.remove("--toc")
 
-			try:
-				db_files[i + 1]
-			except IndexError:
+		print (" Processing: index.md")
+
+		if not self.db_files['index']['text']:
+			tmp = [tmp.append(v) for k,v in list(self.db_files.items()) if not k == 'index']
+			self.db_files['index']['text'] = makeNavigationLinks(self.listChapters, files_tocs=tmp)
+
+		index_cmd += ['-o', self.db_files['index']['path_output'], '--metadata=title:' + self.db_files['index']['title']]
+		run_subprocess(index_cmd, True, self.db_files['index']['text'])		
+
+		# process files 
+		for i in range(0, len(self.files)):
+
+			current = self.db_files[self.files[i]]
+			prev = self.db_files[self.files[i - 1]]
+
+			if (i + 1) < len(self.files):
+				nextt = self.db_files[self.files[i + 1]]
+			else: 
 				nextt = dict() 
 				nextt['path_output'] = ""
 				nextt['title']       = ""
-			else:
-				nextt = db_files[i + 1]
 
 			newcommand = list(self.command)
 			newcommand += ['-t', 'html', '-o', current['path_output']]
@@ -1151,6 +1420,7 @@ class Pandy():
 
 			# re add title (for <title> and first heading)
 			newcommand.append('--metadata=title:' + current['title'])
+			newcommand.append('--variable=project-title:' + self.db_files['index']['title'])
 
 			# navigations
 			if 'index.' in prev['path_input']:
@@ -1165,34 +1435,18 @@ class Pandy():
 			this_toc = current['toc']
 			if not self.settings['NAV_SIDEBAR_TOC']:
 				this_toc = ''
-				if current['toc']:
-					current['text'] = "<div id='toc'>" + current['toc'] + "</div>" + current['text']
+				current['text'] = "<div id='toc'>" + current['toc'] + "</div>" + current['text']
 
 			sidebar_navigation = makeNavigationLinks(self.listChapters, 
 				                  title_active=current['title'], toc_active=this_toc)
-
+			
 			if self.settings['NAV_SIDEBAR']:
 				newcommand.append('--variable=side_navigation:' + sidebar_navigation)
 
 			if self.settings['USE_NAV']:
 				newcommand.append('--variable=book_navigation:' + book_navigation)
 
-			newcommand.append('--variable=project-title:' + db_files[0]['title'])
-
 			run_subprocess(newcommand, True, current['text'])
-
-		# finish index 
-		index_cmd = list(self.command)
-		if "--toc" in index_cmd:
-			index_cmd.remove("--toc")
-
-		if not db_files[0]['text']:
-			db_files[0]['text'] = makeNavigationLinks(self.listChapters, files_tocs=db_files[1:])
-
-		index_cmd += ['-o', db_files[0]['path_output'], '--metadata=title:' + db_files[0]['title']]
-		run_subprocess(index_cmd, True, db_files[0]['text'])
-		
-
 
 
 	def _getOutputPath(self, filepath):
@@ -1211,13 +1465,12 @@ class Pandy():
 		output path, input path, title and text. Does the file processing and gets the title and html
 
 		cmd: the command as starting point 
-		specials: check for abbreviations, admonitions, toc, wikilinks
+		specials: check for abbreviations, admonitions, toc
 		"""
 
 		#sketch
 		properties = {
-		          'path_output' : '',
-		          'path_input' : '',
+		          'path_output' : '', 'path_input' : '',
 		          'title' : '', 'text' : '',
 		          }
 
@@ -1240,10 +1493,13 @@ class Pandy():
 				del cmd[index]
 				break 			
 		
-		# special treatment for specials 
+		# treatment for specials 
 		if specials:
-			cmd_text, toc = if_special_elements(properties['path_input'], 
-				            self.settings['TOC_TAG'], pandoc_path=self.settings['PANDOC'])
+			with cmd_open_write(properties['path_input'], 'r') as tmp:
+				cmd_text = tmp.readlines()
+
+			cmd_text, toc = if_special_elements(cmd_text, self.settings['TOC_TAG'])
+			cmd_text = "".join(cmd_text)
 
 			if toc and not "--toc" in cmd:
 				cmd.append('--toc')
@@ -1257,7 +1513,6 @@ class Pandy():
 		# get the body (this is to also have the metadata; otherwise, 
 		# with --standalone it gets the body but not header-block)
 		properties['text'] = htmlSplitter(minimum, 'body')
-
 		properties['title'] = findTitleHtml(text_html=minimum, continueh1=True)
 		
 		return properties
@@ -1291,12 +1546,6 @@ class Pandy():
 
 		return '<div class="nav"><ul>' + navPre + navIndex + navNext + '</ul></div>'
 
-
-
-
-
-
-
 	def _listChapters(self):
 		""" list of titles in project with properties
 		:returns list 
@@ -1314,181 +1563,13 @@ class Pandy():
 		self.listChapters = tmp_list
 
 
-def makeNavigationLinks(links, title_active=None, toc_active='', files_tocs=None):
-	"""make the whole book navigation: 
-
-	:links   a nested list (or tuple) as title, href
-	:title_selected    item to apply active class and insert toc 
-	:toc_active      toc for selected item
-	:files_tocs      all the tocs from project, for index 
-	"""
-
-	final = ""
-	anchor_tpl = '<a href="{href}">{title}</a>'
-
-	for link in links:
-		title = link[0]
-		href = link[1]
-		anchor = anchor_tpl.format(href=href, title=title)
-		
-		info_active = ""
-		info_toc = ""
-
-		#sidebar 
-		if title_active is not None:
-			if title == title_active:
-				info_active = " class='active'"
-				info_toc = toc_active
-		
-		#index 
-		if files_tocs:
-			for findtoc in files_tocs:
-				if path_getFilename(findtoc['path_output']) == href:
-					#fix links so they point to page 
-					info_toc = findtoc['toc'].replace('<a href="#', '<a href="' + href + "#")
-
-					break
-
-		li = "<li{active}>" + anchor + "{toc}</li>\n"
-		li = li.format(active=info_active, toc=info_toc)
-		
-		final += li
-
-	return "<ul>\n" + final + "</ul>"
-
-def getSplitTocBody(html):
-	"""Returns the TOC list and the rest of the html body.
-	(splitting from <body>)
-	"""
-
-	text = htmlSplitter(html, 'body')
-
-	if not '<div id="TOC">' in text:
-		return '', text.split('</div>')[1]
-	
-	text = text.split('<div id="TOC">')[1]
-	text_parts = text.split('</div>')
-	body = text_parts[1]
-	toc = text_parts[0]
-	toc = toc.splitlines()
-	toc = [line for line in toc if line]
-	toc = toc[1:-1] # remove first <ul> and last </ul>
-	toc = "".join(toc)
-
-	return toc, body
-
-
-def findTitleHtml(filepath=None, pandocpath=None, text_md=None, text_html=None, continueh1=False):
-	"""Find the title in HTML. First with <title>, then first <h1>"""
-
-	the_title = ""
-	if not filepath and text_md is None and text_html is None:
-		# how do you me want to work!?!?!
-		return the_title
-
-	if filepath:
-		the_title = path_delExtension(path_getFilename(filepath))
-
-	if pandocpath is None and text_md is None and text_html is None:
-		#why did you even bother....
-		return the_title
-
-	if text_html is None and text_md is None and filepath is None:
-		# I dont do magic 
-		return the_title
-
-	if text_html is None:
-		if text_md is None:
-			text_md = cmd_open_file(filepath)
-
-		if not filepath.endswith(".html"):
-			command = [pandocpath, '--standalone', '-t', 'html']
-			text_html = run_subprocess(command, True, text_md)
-		else:
-			text_html = text_md
-
-	html_pieces = text_html.split("<body>")
-	title_html = html_pieces[0].split("<title>")[1].strip()
-	title_html = title_html.split("</title>")[0].replace(os.linesep, '')
-
-	if title_html:
-		return title_html
-
-	if continueh1:
-		title_h1 = htmlSplitter(html_pieces[1], "h1", special_start="<h1 ", find=True)
-		if not title_h1:
-			return the_title
-
-		return title_h1.split(">")[1]
-
-	return the_title
-
-def htmlSplitter(text, tag, special_start=None, find=False):
-	
-	tpl_start = "<" + tag + ">"
-	if special_start:
-		tpl_start = special_start
-
-	tpl_end = "</" + tag + ">"
-
-	splitting = text.split(tpl_start)
-	if find:
-		if len(splitting) <= 1:
-			return None 
-
-	return splitting[1].split(tpl_end)[0]
-
-def extractMdLinks(text, extension="md"):
-	"""Extract markdown links in text with extension. 
-	:text list 
-	:extension the allowed extension
-	:return a nested list. holder(title, link)
-	"""
-
-	list_links = list()
-
-	expr = "\[(.+?)?\]\((.+?\.(" + extension + "))\)"
-	expr = r'' + expr
-
-	for line in text:
-		
-		matches = re.findall(expr, line)
-		for m in matches:
-			title = m[0]
-			link  = m[1]
-			if [title, link] not in list_links:
-				list_links.append([title, link])
-
-	return list_links
-
-def orderListFromList(orderthis, fromthis, bythiscol):
-	"""Order a list, based on another by value. 
-	:orderthis    list to be ordered 
-	:fromthis     new order list 
-	:bythiscol    "column" number to order by this value set 
-	"""
-
-	tmp_list = list()
-
-
-	for new_order in fromthis:
-		for index, item in enumerate(orderthis):
-			#we trust the user that will be no files with same name
-			if new_order[bythiscol] in item:
-				tmp_list.append(item)
-				break 
-
-	return tmp_list
 
 if __name__ == '__main__':
 
 	args = get_args()
 
-
 	print ("\n  ------------------ STARTING ------------------------------")
 	CONFIG = prepare_args(args)
-
-	exit()
 
 	# steady, ready, go!
 	Pandy(CONFIG)
