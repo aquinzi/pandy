@@ -6,7 +6,7 @@
 
 
 # index shouldnt have toc
-# check duplicates from custom index (while adding them to process)
+# check if book is really for markdown only
 # if index (no .index.md) -> add toc too
 # if custom index has titile, use it as project title 
 # TOC wherever you want
@@ -838,6 +838,7 @@ class Pandy():
 
 		self.files = files_list(self.input, only_exts=exts, exclude_files=excl)
 		
+		# find index. file
 		i = 0
 		total = len(self.files)
 		while i < total:
@@ -926,7 +927,7 @@ class Pandy():
 			else:
 				# book
 				if len(self.files) < 3:
-					print ("  Sorry, not available with that few files. ")
+					print ("  Feed me more files to make something pretty :) . ")
 					exit()
 
 				# check if there is an output path, if not use
@@ -1089,6 +1090,7 @@ class Pandy():
 
 			#order files
 			self.files = orderListFromList(self.files, files_order, 1)
+			self.files = list(set(self.files))
 
 		self._listChapters()
 		filesTotal = len(self.files)
