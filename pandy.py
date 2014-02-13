@@ -6,7 +6,7 @@
 
 
 # check if book is really for markdown only
-# option to exclude toc from sidebar navigation
+# args: check default options to default conf.
 # TOC wherever you want
 # prob split stuff instead of having one big file
 # Enable/disble extensions from cli
@@ -129,8 +129,9 @@ _DEFAULT_CONFIG = {
 	'BOOK': False,
 	'FILE_INDEX': '',
 	'USE_NAV': True, 
-	'NAV_TITLE': False,  #For book, use title navigation
-	'NAV_SIDEBAR': False,  #For book, sidebar with titles
+	'NAV_TITLE': False,  #book, use title navigation
+	'NAV_SIDEBAR': False,  #book, sidebar with titles
+	'NAV_SIDEBAR_TOC': True, #book, have current toc in sidebar
 
 	'EMAIL_HIDE': False, # e-mail obfuscation (default none, true = references)
 	'BIBLIOGRAPHY': '',
@@ -686,9 +687,10 @@ def get_args():
 	other.add_argument("--hide", action='store_true', help="e-mail obfuscation (default none, true = references)")
 	other.add_argument("--sections", action='store_true', help="Wrap sections in <sections>, attach identifiers instead of titles")
 
-	other.add_argument("--no-nav", "-nn", help="(For book) disable navigation", action="store_true")
-	other.add_argument("--nav-title", "-nt", help="(For book) use titles in navigation", action="store_true")
+	other.add_argument("--no-nav", "-nn", help="(For book) disable book navigation", action="store_true")
+	other.add_argument("--nav-title", "-nt", help="(For book) use titles in book navigation", action="store_true")
 	other.add_argument("--nav-side", "-ns", help="(For book) Make a sidebar with titles", action="store_true")
+	other.add_argument("--no-side-toc", "-nst", help="(For book) disable TOC in sidebar (keep in doc)", action="store_true")
 	other.add_argument("--config", help="Use a configuration file (option=key values)", metavar="FILE")
 
 	pandoc = parser.add_argument_group(' Pandoc')
@@ -720,6 +722,7 @@ def get_args():
 		'nav_side' : 'NAV_SIDEBAR',
 		'no_nav' : 'USE_NAV',
 		'config' : 'CONFIG_FILE',
+		'no_side_toc' : 'NAV_SIDEBAR_TOC',
 		}
 
 	#just convert to uppercase
@@ -737,6 +740,9 @@ def get_args():
 				val = 'html' if val else 'html5'
 			if key == 'no_nav':
 				val = False if val else True 
+			if key == 'no_side_toc':
+				val = False if val else True 
+
 
 			settings_args[argsToSettings[key]] = val 
 
@@ -1100,7 +1106,7 @@ class Pandy():
 		tmp = list(self.files) 
 		tmp.append(index_file)
 
-		# get other files properties
+		# get files properties
 		for picked in tmp:
 			if not os.path.exists(picked):
 				continue
@@ -1113,7 +1119,12 @@ class Pandy():
 			# should be in another way, but too lazy
 			text_for_toc = "dfgdfg <body>" + props['text'] + "</body> dfghdkfjdhjkf"
 			current_toc, props['text'] = getSplitTocBody(text_for_toc)
-			props['toc'] = "<ul>" + current_toc + "</ul>"
+			
+
+			if current_toc:
+				props['toc'] = "<ul>" + current_toc + "</ul>"
+			else:
+				props['toc'] = ""
 
 			if 'index.' in picked.lower():
 				db_files[0].update(props)
@@ -1154,8 +1165,15 @@ class Pandy():
 			book_navigation = self._bookNavigation(current['path_output'], 
 				                          prev['path_output'], prev['title'], 
 				                          nextt['path_output'], nextt['title'])
+
+			this_toc = current['toc']
+			if not self.settings['NAV_SIDEBAR_TOC']:
+				this_toc = ''
+				if current['toc']:
+					current['text'] = "<div id='toc'>" + current['toc'] + "</div>" + current['text']
+
 			sidebar_navigation = makeNavigationLinks(self.listChapters, 
-				                  title_active=current['title'], toc_active=current['toc'])
+				                  title_active=current['title'], toc_active=this_toc)
 
 			if self.settings['NAV_SIDEBAR']:
 				newcommand.append('--variable=side_navigation:' + sidebar_navigation)
@@ -1166,7 +1184,6 @@ class Pandy():
 			newcommand.append('--variable=project-title:' + db_files[0]['title'])
 
 			run_subprocess(newcommand, True, current['text'])
-
 
 		# finish index 
 		index_cmd = list(self.command)
@@ -1322,7 +1339,7 @@ def makeNavigationLinks(links, title_active=None, toc_active='', files_tocs=None
 		info_toc = ""
 
 		#sidebar 
-		if title_active is not None and toc_active:
+		if title_active is not None:
 			if title == title_active:
 				info_active = " class='active'"
 				info_toc = toc_active
@@ -1351,7 +1368,7 @@ def getSplitTocBody(html):
 	text = htmlSplitter(html, 'body')
 
 	if not '<div id="TOC">' in text:
-		return '', text 
+		return '', text.split('</div>')[1]
 	
 	text = text.split('<div id="TOC">')[1]
 	text_parts = text.split('</div>')
