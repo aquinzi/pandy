@@ -7,10 +7,6 @@
 
 # rewriting!
 # For book:
-# 		navigation: pages titles in sidebar, next-prev
-# 					sidebar -> highlight active
-# 		
-# 		nav_pre according to index
 # 		
 # 		basically, copy sphinx style: :)
 # 		
@@ -37,13 +33,6 @@
 # remove source, format to/from of required commands. So can use .ini
 # 				basically we only need (from) md to html for special processing and they're default
 # 
-# 
-# Changes
-# read .ini automatically in folder where runs/source 
-# remove some methods/cleanup
-# args take precedence over ini, which take precedence over default 
-# wikilinks without file| prefix. Must use markdown extension
-# wikilinks in any file (not only index) (book)
 
 import sys
 
@@ -610,21 +599,9 @@ def parse_wikiLinks(text, pandoc_path):
 	"""
 
 	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
-	expr = '\[(.+?)?\]\((.+?\.(' + extensions + '))\)'
-	expr = re.compile(r'' + expr)
-
-	links = list()
 
 	# harvest all links first 
-	for line in text:
-		m = expr.match(line)
-		if m:
-			title_orig = m.group(1)
-			link_orig  = m.group(2)
-			links.append([title_orig, link_orig])
-
-	#remove duplicates
-	links = list(set(links))
+	links = extractMdLinks(text, extension=extensions)
 
 	#find real title and output, could have been done above but oh well
 	for link in links:
@@ -1098,44 +1075,82 @@ class Pandy():
 	def _parseBook(self):
 		"""Make a book with navigation between files """
 
+		# if we have a navigation file, have that as the file order
+		# Also create index
+		index_file = self.settings['FILE_INDEX']
+		index_ouput = os.path.join(self.output, "index.html")
+		index_cmd = list(self.command)
+		if index_file and os.path.exists(index_file):
+
+			index_text = cmd_open_file(index_file)
+			index_text = index_text.splitlines()
+			
+			files_order = extractMdLinks(index_text, extension="md")
+			
+			index_text = parse_wikiLinks(index_text, pandoc_path=self.settings['PANDOC'])
+			index_text = os.linesep.join(n for n in index_text)
+
+			#order files
+			self.files = orderListFromList(files_order, self.files, 1)
+		
+		
 		filesTotal = len(self.files)
 		self.listTitles()
+		self._listChapters()
+
+		if not index_file:
+			#build index
+			index_text = makeSidebar(self.listChapters)
+		
+		index_cmd += ['-o', index_ouput, '--metadata=title:Index']
+		run_subprocess(index_cmd, True, index_text)
+
 
 		i = 0
+		file_previous = self._singleFileProperties("")
 		while i < filesTotal:
 			newcommand = list(self.command)
 			print (" Converting: " + path_getFilename(self.files[i]))
-
-			if self.settings['NAV_SIDEBAR']:
-				newcommand.append('--variable=book_navigation:' + self.listTitles)
 			
 			# prepare prev, current and next files
-			if i == 0:
-				file_previous = self._singleFileProperties("")
-
 			file_current = self._singleFileProperties(self.files[i], newcommand, specials=True)
 			
 			if (i + 1) < filesTotal:
 				file_next = self._singleFileProperties(self.files[i + 1], newcommand, specials=True) 
 		
 			# book navigation
-			navigation = self._bookNavigation(file_current['path_output'], 
+			book_navigation = self._bookNavigation(file_current['path_output'], 
 				                          file_previous['path_output'], file_previous['title'], 
 				                          file_next['path_output'], file_next['title'] )
-			#build new text
-			text_new = file_current['text']
 
-			if self.settings['USE_NAV']:
-				text_new = navigation + text_new + navigation 
 
 			newcommand += ['-t', 'html', '-o', file_current['path_output']]
-			
 			# "hack" to have the file or title in the title (but using --title-prefix instead 
 			# of --metadata=title:) so it doesnt print in body (and you won't notice 
 			# the - at the end, shut up)
 			newcommand.append('--title-prefix=' + file_current['title'])
 
 			path_mkdir(path_get(file_current['path_output']))
+
+			#build new text
+			text_new = file_current['text']
+			
+			# should be in another way, but too lazy
+			text_for_toc = "dfgdfg <body>" + text_new + "</body> dfghdkfjdhjkf"
+			current_toc, text_new = getSplitTocBody(text_for_toc)
+			current_toc = "<ul>" + current_toc + "</ul>"
+
+
+			#sidebar navigation
+			sidebar_navigation = makeSidebar(self.listChapters, file_current['title'], current_toc)
+
+			if self.settings['NAV_SIDEBAR']:
+				newcommand.append('--variable=book_navigation:' + sidebar_navigation)
+
+
+			if self.settings['USE_NAV']:
+				text_new = book_navigation + text_new + book_navigation 
+
 			file_current['text'] = run_subprocess(newcommand, True, text_new)
 		
 			file_previous = file_current
@@ -1144,40 +1159,12 @@ class Pandy():
 
 			i += 1
 
-		# Process index
-		index_ouput = os.path.join(self.output, "index.html")
-		index_file = self.settings['FILE_INDEX']
-
-
-		if index_file and os.path.exists(index_file):
-			index_text = cmd_open_file(index_file)
-			index_text = index_text.split("\n")
-			index_text = parse_wikiLinks(index_text, pandoc_path=self.settings['PANDOC'])
-
-			index_text = os.linesep.join(n for n in index_text)
-			newcommand = list(self.command)
-		else:
-			#build index
-			index_text = self.listTitles
-		
-		newcommand += ['-o', index_ouput, '--metadata=title:Index']
-		run_subprocess(newcommand, True, index_text)
-
-
-
-
-
-
-
-
-
 
 	def _getOutputPath(self, filepath):
 		"""Get output path"""
 
 		if not self.output:
 			return path_delExtension(filepath)
-
 
 		if self.settings['OUTPUT_FLAT'] or (not self.settings['OUTPUT_FLAT'] and filepath == self.input):
 			return os.path.join(self.output, path_delExtension(path_getFilename(filepath)))
@@ -1220,7 +1207,8 @@ class Pandy():
 		
 		# special treatment for specials 
 		if specials:
-			cmd_text, toc = if_special_elements(properties['path_input'], self.settings['TOC_TAG'], pandoc_path=self.settings['PANDOC'])
+			cmd_text, toc = if_special_elements(properties['path_input'], 
+				            self.settings['TOC_TAG'], pandoc_path=self.settings['PANDOC'])
 
 			if toc and not "--toc" in cmd:
 				cmd.append('--toc')
@@ -1233,22 +1221,10 @@ class Pandy():
 
 		# get the body (this is to also have the metadata; otherwise, 
 		# with --standalone it gets the body but not header-block)
-		html_pieces = minimum.split("<body>")
+		properties['text'] = htmlSplitter(minimum, 'body')
+
+		properties['title'] = findTitleHtml(text_html=minimum, continueh1=True)
 		
-		properties['text'] = html_pieces[1].split("</body>")[0]
-
-		title = html_pieces[0].split("<title>")[1]
-		title = title.replace("</title>", "") #or split it again
-
-		# check if has, otherwise find it!
-		if title: 
-			properties['title'] = title
-		else: 
-			tryme = findTitleHtml(text_html=properties['text'], continueh1=True)
-			
-			if tryme:
-				properties['title'] = tryme
-
 		return properties
 
 	def _bookNavigation(self, current_path, prev_path, prev_title, next_path, next_title):
@@ -1256,26 +1232,30 @@ class Pandy():
 
 		navPre  = ""
 		navNext = ""
-		
+		navIndex = ""
+
+		index_url = path_relative_to(os.path.join(self.output, 'index.html'),
+							current_path)
+
 		use_titles = self.settings['NAV_TITLE']
+		link_tpl = '<li><a href="{ref}">{title}</a></li>'
+
+		navIndex = link_tpl.format(ref=index_url, title="index")
 
 		if prev_path:
 			prev_path = path_relative_to(prev_path, current_path)
 
-			navLink = prev_title if use_titles else 'prev'			
-			navPre  = '<a href="' + prev_path + '">&lt; '+ navLink + '</a>'
+			navLink = prev_title if use_titles else 'prev'	
+			navPre = link_tpl.format(ref=prev_path, title="&lt; " + navLink)
 
 		if next_path:
 			next_path = path_relative_to(next_path, current_path)
 
 			navLink = next_title if use_titles else 'next'
-			navNext = '<a href="' + next_path + '">' + navLink + ' &gt;</a>'
+			navNext = link_tpl.format(ref=next_path, title=navLink + " &gt;")
 
-		index_url = path_relative_to(os.path.join(self.output, 'index.html'),
-							current_path)
+		return '<div class="nav"><ul>' + navPre + navIndex + navNext + '</ul></div>'
 
-		return '<div class="nav">' + navPre + ' <a href="'+index_url+'">index</a> '\
-				 + navNext + '</div>'
 
 
 
@@ -1300,6 +1280,52 @@ class Pandy():
 		self.listTitles = "<ul>" + bookIndex + "</ul>"
 
 
+	def _listChapters(self):
+		""" list of titles in project with properties
+		:returns list 
+		"""
+
+		tmp_list = list()  # holds tuple: title, href
+
+		for the_savior in self.files:
+			newcommand = list(self.command)
+			file_current = self._singleFileProperties(the_savior, newcommand, True)
+			relative = path_relative_to(file_current['path_output'], self.output, True)
+
+			tmp_list.append((file_current['title'], relative))
+
+		self.listChapters = tmp_list
+
+
+def makeSidebar(links, title_active=None, toc_active=''):
+	"""make the sidebar navigation with selected title and toc
+	:links   a nested list (or tuple) as title, href
+	:title_selected    item to apply active class and insert toc 
+	:toc_selected      toc for selected item
+	"""
+
+	sidebar = ""
+	anchor_tpl = '<a href="{ref}">{title}</a>'
+
+	for link in links:
+		title = link[0]
+		href = link[1]
+		anchor = anchor_tpl.format(href=href, title=title)
+
+		li = "<li{active}>{anchor}{toc}</li>\n"
+
+		li = li.format(anchor=anchor)
+
+		if title_active is not None and title == title_active:
+			li = li.format(active=" class='active'", toc=toc_active)
+
+		sidebar += li
+
+	return sidebar 
+
+
+
+
 def getSplitTocBody(html):
 	"""Returns the TOC list and the rest of the html body.
 	(splitting from <body>)
@@ -1308,8 +1334,10 @@ def getSplitTocBody(html):
 	text = htmlSplitter(html, 'body')
 	text = text.split('<div id="TOC">')[1]
 	text_parts = text.split('</div>')
-	toc = text_parts[0]
+
 	body = text_parts[1]
+	
+	toc = text_parts[0]
 	toc = toc.splitlines()
 	toc = [line for line in toc if line]
 	toc = toc[1:-1] # remove first <ul> and last </ul>
@@ -1323,7 +1351,7 @@ def findTitleHtml(filepath=None, pandocpath=None, text_md=None, text_html=None, 
 	
 	the_title = ""
 	if not filepath and text_md is None and text_html is None:
-		# how do me want to work!?!?!
+		# how do you me want to work!?!?!
 		return the_title
 	
 	the_title = path_delExtension(path_getFilename(filepath))
@@ -1348,7 +1376,7 @@ def findTitleHtml(filepath=None, pandocpath=None, text_md=None, text_html=None, 
 		return title_html
 
 	if continueh1:
-		title_h1 = htmlSplitter(html_pieces[0], "h1", special_start="<h1 ", find=True)
+		title_h1 = htmlSplitter(html_pieces[1], "h1", special_start="<h1 ", find=True)
 		if not title_h1:
 			return the_title
 
@@ -1371,8 +1399,46 @@ def htmlSplitter(text, tag, special_start=None, find=False):
 
 	return splitting[1].split(tpl_end)[0]
 
+def extractMdLinks(text, extension="md"):
+	"""Extract markdown links in text with extension. 
+	:text list 
+	:extension the allowed extension
+	:return a nested list. holder(title, link)
+	"""
 
+	list_links = list()
 
+	expr = "\[(.+?)?\]\((.+?\.(" + extension + "))\)"
+	expr = r'' + expr
+
+	for line in text:
+		
+		matches = re.findall(expr, line)
+		for m in matches:
+			title = m[0]
+			link  = m[1]
+			if [title, link] not in list_links:
+				list_links.append([title, link])
+
+	return list_links
+
+def orderListFromList(orderthis, fromthis, bythiscol):
+	"""Order a list, based on another by value. 
+	:orderthis    list to be ordered 
+	:fromthis     new order list 
+	:bythiscol    "column" number to order by this value set 
+	"""
+
+	tmp_list = list()
+
+	for new_order in fromthis:
+		for index, item in enumerate(orderthis):
+			#we trust the user that will be no files with same name
+			if new_order[bythiscol] in item:
+				tmp_list.append(item)
+				break 
+
+	return tmp_list
 
 if __name__ == '__main__':
 
