@@ -25,7 +25,7 @@
 # 	       chapter3
 
 
-# 					
+# change index file to automatically search for index.md
 # TOC wherever you want
 # prob split stuff instead of having one big file
 # Enable/disble extensions from cli
@@ -388,7 +388,7 @@ def run_subprocess(command, output=False, text=None):
 		text = text.encode('utf-8')
 		tmp  = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 		result = tmp.communicate(text)[0] # send stdin 
-		return result 
+		return result
 
 def translate_synonyms(word):
 	"""Translate the synonyms to complete words"""
@@ -593,9 +593,11 @@ def find_TOCinFile(text, placeholder, replace_with='<!-- TOCatized -->'):
 
 	return False, text 
 
-def parse_wikiLinks(text, pandoc_path):
+def parse_wikiLinks(text, pandoc_path, base_path=None):
 	""" Process "wiki" links: [](file.md) to [file title](newpath.html).
 	It must be a markdown file, opened before (list)
+
+	:base_path    base path to search in when finding title html
 	"""
 
 	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
@@ -603,14 +605,22 @@ def parse_wikiLinks(text, pandoc_path):
 	# harvest all links first 
 	links = extractMdLinks(text, extension=extensions)
 
-	#find real title and output, could have been done above but oh well
+	#find real title and output
 	for link in links:
-		title_new = ""
-		if os.path.exists(link[1]):
-			title_new = findTitleHtml(link[1], pandocpath=pandoc_path, continueh1=True)
-		link.append(title_new)
-
 		link_new = path_delExtension(link[1]) + ".html"
+		future_path = link_new
+		
+		if base_path:
+			future_path = os.path.join(base_path, link_new)
+
+		title_new = link[0]
+		if not title_new: 
+			if os.path.exists(future_path):
+				title_new = findTitleHtml(future_path, pandocpath=pandoc_path, continueh1=True)
+			else:
+				title_new = path_delExtension(link[1])
+
+		link.append(title_new)
 		link.append(link_new)
 
 	# replace in file
@@ -1076,39 +1086,27 @@ class Pandy():
 		"""Make a book with navigation between files """
 
 		# if we have a navigation file, have that as the file order
-		# Also create index
 		index_file = self.settings['FILE_INDEX']
 		index_ouput = os.path.join(self.output, "index.html")
-		index_cmd = list(self.command)
+		index_text = None 
+
 		if index_file and os.path.exists(index_file):
 
 			index_text = cmd_open_file(index_file)
 			index_text = index_text.splitlines()
 			
 			files_order = extractMdLinks(index_text, extension="md")
-			
-			index_text = parse_wikiLinks(index_text, pandoc_path=self.settings['PANDOC'])
-			index_text = os.linesep.join(n for n in index_text)
 
 			#order files
-			self.files = orderListFromList(files_order, self.files, 1)
-		
-		
-		filesTotal = len(self.files)
-		self.listTitles()
+			self.files = orderListFromList(self.files, files_order, 1)
+
 		self._listChapters()
-
-		if not index_file:
-			#build index
-			index_text = makeSidebar(self.listChapters)
-		
-		index_cmd += ['-o', index_ouput, '--metadata=title:Index']
-		run_subprocess(index_cmd, True, index_text)
-
+		filesTotal = len(self.files)
 
 		i = 0
 		file_previous = self._singleFileProperties("")
 		while i < filesTotal:
+			
 			newcommand = list(self.command)
 			print (" Converting: " + path_getFilename(self.files[i]))
 			
@@ -1137,8 +1135,10 @@ class Pandy():
 			
 			# should be in another way, but too lazy
 			text_for_toc = "dfgdfg <body>" + text_new + "</body> dfghdkfjdhjkf"
-			current_toc, text_new = getSplitTocBody(text_for_toc)
+			current_toc, current_body = getSplitTocBody(text_for_toc)
 			current_toc = "<ul>" + current_toc + "</ul>"
+
+			text_new = text_new.replace(current_toc, '')
 
 
 			#sidebar navigation
@@ -1158,6 +1158,18 @@ class Pandy():
 			file_next     = self._singleFileProperties("")
 
 			i += 1
+
+		
+		# finish index
+		index_cmd = list(self.command)
+		if index_text:
+			index_text = parse_wikiLinks(index_text, pandoc_path=self.settings['PANDOC'], base_path=self.settings['OUTPUT_PATH'])
+			index_text = os.linesep.join(n for n in index_text)
+		else:
+			index_text = makeSidebar(self.listChapters)
+		
+		index_cmd += ['-o', index_ouput, '--metadata=title:Index']
+		run_subprocess(index_cmd, True, index_text)
 
 
 	def _getOutputPath(self, filepath):
@@ -1217,7 +1229,7 @@ class Pandy():
 			cmd.append(properties['path_input'])
 
 		minimum = run_subprocess(cmd, True, cmd_text)
-		#minimum = minimum.decode('utf-8')
+		minimum = str(minimum, encoding='utf8')
 
 		# get the body (this is to also have the metadata; otherwise, 
 		# with --standalone it gets the body but not header-block)
@@ -1305,19 +1317,20 @@ def makeSidebar(links, title_active=None, toc_active=''):
 	"""
 
 	sidebar = ""
-	anchor_tpl = '<a href="{ref}">{title}</a>'
+	anchor_tpl = '<a href="{href}">{title}</a>'
 
 	for link in links:
 		title = link[0]
 		href = link[1]
 		anchor = anchor_tpl.format(href=href, title=title)
 
-		li = "<li{active}>{anchor}{toc}</li>\n"
-
-		li = li.format(anchor=anchor)
+		li = "<li{active}>" + anchor + "{toc}</li>\n"
 
 		if title_active is not None and title == title_active:
 			li = li.format(active=" class='active'", toc=toc_active)
+		else:
+			li = li.format(active="", toc='')
+
 
 		sidebar += li
 
@@ -1348,29 +1361,36 @@ def getSplitTocBody(html):
 
 def findTitleHtml(filepath=None, pandocpath=None, text_md=None, text_html=None, continueh1=False):
 	"""Find the title in HTML. First with <title>, then first <h1>"""
-	
+
 	the_title = ""
 	if not filepath and text_md is None and text_html is None:
 		# how do you me want to work!?!?!
 		return the_title
-	
-	the_title = path_delExtension(path_getFilename(filepath))
+
+	if filepath:
+		the_title = path_delExtension(path_getFilename(filepath))
 
 	if pandocpath is None and text_md is None and text_html is None:
 		#why did you even bother....
 		return the_title
 
+	if text_html is None and text_md is None and filepath is None:
+		# I dont do magic 
+		return the_title
+
 	if text_html is None:
 		if text_md is None:
-			with open(filepath) as lala:
-				text_md = lala.read() 
+			text_md = cmd_open_file(filepath)
 
-		command = [pandocpath, '--standalone', '-t', 'html']
-		text_html = run_subprocess(command, True, text_md)
+		if not filepath.endswith(".html"):
+			command = [pandocpath, '--standalone', '-t', 'html']
+			text_html = run_subprocess(command, True, text_md)
+		else:
+			text_html = text_md
 
 	html_pieces = text_html.split("<body>")
-	title_html = html_pieces[0].split("<title>")[1]
-	title_html = title_html.split("</title>")[0]
+	title_html = html_pieces[0].split("<title>")[1].strip()
+	title_html = title_html.split("</title>")[0].replace(os.linesep, '')
 
 	if title_html:
 		return title_html
@@ -1430,6 +1450,7 @@ def orderListFromList(orderthis, fromthis, bythiscol):
 	"""
 
 	tmp_list = list()
+
 
 	for new_order in fromthis:
 		for index, item in enumerate(orderthis):
