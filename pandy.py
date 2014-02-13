@@ -9,9 +9,7 @@
 # prob split stuff instead of having one big file
 # Enable/disble extensions from cli
 # custom css/js: --include-in-header
-# remove source, format to/from of required commands. So can use .ini
-# 				basically we only need (from) md to html for special processing and they're default
-# 
+ 
 
 import sys
 
@@ -30,7 +28,7 @@ import re
 # ==== info & pandoc config ====
 # ==============================
 
-__version__ = "1.9.5"
+__version__ = "2.0"
 _MY_USAGE = ''' %(prog)s [source] [format_from] [format_to] [other options]
  
  [format_to] can be a list of formats; separated with spaces 
@@ -654,11 +652,12 @@ def get_args():
 		                    formatter_class=argparse.RawTextHelpFormatter) 
 
 	required = parser.add_argument_group(' Required')
-	required.add_argument("source",      action=InputExist,   help="file, folder or a .list")
-	required.add_argument("format_from", action=ValueCorrect, help="Convert from this")
-	required.add_argument("format_to",   action=ValueCorrect, help="Convert to this (can be a list)", nargs='+')
-
+	required.add_argument("source",      action=InputExist,   help="file, folder, .list or config file")
+	
 	option_file = parser.add_argument_group(' Options:\n\n file related')
+	option_file.add_argument("--from", '-f', action=ValueCorrect, help="Convert from this")
+	option_file.add_argument("--to", '-t',  action=ValueCorrect, help="Convert to this (can be a list)", nargs='+')
+
 	option_file.add_argument("--output", "-o", help="Output folder", metavar="FOLDER")
 	option_file.add_argument("--flat", action='store_true', help="Don't keep folder structure")
 	option_file.add_argument("--self", help="self contained file", action='store_true')	
@@ -702,8 +701,6 @@ def get_args():
 	
 	arg_dict = vars(parser.parse_args())
 
-	print(arg_dict)
-
 	#convert those ugly names to the nice ones
 	argsToSettings = {
 		'output': 'OUTPUT_PATH',
@@ -723,11 +720,13 @@ def get_args():
 		'no_nav' : 'USE_NAV',
 		'config' : 'CONFIG_FILE',
 		'no_side_toc' : 'NAV_SIDEBAR_TOC',
+		'from': 'FORMAT_FROM',
+		'to': 'FORMAT_TO',
 		}
 
 	#just convert to uppercase
 	options_noNameChange = ('pandoc', 'highlight', 'slides', 'source', 'sections',
-		             'format_from', 'format_to', 'toc', 'merge', 'book', 'highlight_no') 
+		             'toc', 'merge', 'book', 'highlight_no') 
 
 	settings_args = dict()
 
@@ -757,6 +756,10 @@ def prepare_args(arg_dict):
 	
 	settings_final = dict(_DEFAULT_CONFIG)
 
+	if arg_dict['SOURCE'].endswith(".ini"):
+		settings_final['CONFIG_FILE'] = arg_dict['SOURCE']
+		del arg_dict['SOURCE']
+
 	# complete missing options. default <- .ini <- args 
 	# read ini and replace default
 	if os.path.exists(settings_final['CONFIG_FILE']):
@@ -779,10 +782,7 @@ def prepare_args(arg_dict):
 
 	settings_final.update(arg_dict)
 
-	
-
 	# Check option belonging, replace special keys, etc 
-	
 	# if pdf, warn that needs latex 
 	if "pdf" in settings_final['FORMAT_TO']:
 		answer = msg_cli_yesno("  To convert to PDF needs LaTeX installed (and in PATH).")
@@ -805,10 +805,6 @@ def prepare_args(arg_dict):
 			settings_final['NAV_TITLE']   = False
 			settings_final['NAV_SIDEBAR'] = False
 			settings_final['USE_NAV']     = False
-
-		if settings_final['FILE_INDEX']:
-			print("  --index only works with book. Skipping that option")
-			settings_final['FILE_INDEX'] = ""
 
 	return settings_final
 
@@ -1488,10 +1484,11 @@ if __name__ == '__main__':
 
 	args = get_args()
 
-	exit()
 
 	print ("\n  ------------------ STARTING ------------------------------")
 	CONFIG = prepare_args(args)
+
+	exit()
 
 	# steady, ready, go!
 	Pandy(CONFIG)
