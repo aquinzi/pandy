@@ -5,8 +5,7 @@
 # tested for pandoc 1.12.3
 
 
-# change index file to automatically search for index.md
-# index should have toc
+# index shouldnt have toc
 # check duplicates from custom index (while adding them to process)
 # if index (no .index.md) -> add toc too
 # if custom index has titile, use it as project title 
@@ -130,7 +129,7 @@ _DEFAULT_CONFIG = {
 	
 	'MERGE': False,
 	'BOOK': False,
-	'FILE_INDEX': '',
+	'FILE_INDEX': 'index.md',
 	'USE_NAV': True, 
 	'NAV_TITLE': False,  #For book, use title navigation
 	'NAV_SIDEBAR': False,  #For book, sidebar with titles
@@ -672,7 +671,6 @@ def get_args():
 	option_file.add_argument("--self", help="self contained file", action='store_true')	
 	option_file.add_argument("--header", help="Header file. Included as it is (raw, verbatim)", metavar="FILE")
 	option_file.add_argument("--footer", help="Footer file. Included as it is (raw, verbatim)", metavar="FILE")
-	option_file.add_argument("--index", help="Custom index file for book. Can use wiki links ", metavar="FILE")
 	option_file.add_argument("--html4", help="Use html4 output instead of html5", action="store_true")
 	option_file.add_argument("--slides", help="Slides format. Options: " + ", ".join(_SLIDES_OPTIONS) + ". Default: %(default)s", choices=_SLIDES_OPTIONS, default=_DEFAULT_CONFIG['SLIDES'], metavar="")
 	option_file.add_argument("--bib", help="Use bibliography file", metavar="FILE")
@@ -724,7 +722,6 @@ def get_args():
 		'html4': 'HTML_VER',
 		'header': 'FILE_HEADER',
 		'footer': 'FILE_FOOTER',
-		'index': 'FILE_INDEX',
 		'depth' : 'TOC_DEPTH',
 		'nav_side' : 'NAV_SIDEBAR',
 		'no_nav' : 'USE_NAV',
@@ -838,10 +835,18 @@ class Pandy():
 			exts = (".html", ".htm")
 
 		excl = [DEFAULT_INI_NAME]
-		if self.settings['FILE_INDEX']:
-			excl.append(self.settings['FILE_INDEX'])
 
 		self.files = files_list(self.input, only_exts=exts, exclude_files=excl)
+		
+		i = 0
+		total = len(self.files)
+		while i < total:
+			if "index." in self.files[i]:
+				self.settings['FILE_INDEX'] = self.files[i]
+				del self.files[i]
+				break 
+			i += 1
+
 
 		self.format_from, self.format_to = check_synonyms(self.format_from, self.format_to)
 
@@ -1148,7 +1153,8 @@ class Pandy():
 		else:
 			index_text = makeSidebar(self.listChapters)
 		
-		index_cmd += ['-o', index_ouput, '--metadata=title:Index']
+		#index_cmd += ['-o', index_ouput, '--metadata=title:Index']
+		index_cmd += ['-o', index_ouput]
 		run_subprocess(index_cmd, True, index_text)
 
 
@@ -1251,25 +1257,7 @@ class Pandy():
 
 
 
-	def listTitles(self):
-		"""Get a titles list (html) of all the files. 
-		For Sidebar title list
-		"""
 
-		filesTotal = len(self.files)
-		bookIndex = ""
-
-		i = 0
-		while i < filesTotal:
-			newcommand = list(self.command)
-			file_current = self._singleFileProperties(self.files[i], newcommand, True)
-
-			relative = path_relative_to(file_current['path_output'], self.output, True)
-			bookIndex += '<li><a href="' + relative + '">' + \
-							file_current['title'] + '</a></li>'
-			i += 1
-
-		self.listTitles = "<ul>" + bookIndex + "</ul>"
 
 
 	def _listChapters(self):
