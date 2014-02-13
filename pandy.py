@@ -5,8 +5,6 @@
 # tested for pandoc 1.12.3
 
 
-# check if book is really for markdown only
-# args: check default options to default conf.
 # TOC wherever you want
 # prob split stuff instead of having one big file
 # Enable/disble extensions from cli
@@ -130,7 +128,7 @@ _DEFAULT_CONFIG = {
 	'FILE_INDEX': '',
 	'USE_NAV': True, 
 	'NAV_TITLE': False,  #book, use title navigation
-	'NAV_SIDEBAR': False,  #book, sidebar with titles
+	'NAV_SIDEBAR': True,  #book, sidebar with titles
 	'NAV_SIDEBAR_TOC': True, #book, have current toc in sidebar
 
 	'EMAIL_HIDE': False, # e-mail obfuscation (default none, true = references)
@@ -689,7 +687,7 @@ def get_args():
 
 	other.add_argument("--no-nav", "-nn", help="(For book) disable book navigation", action="store_true")
 	other.add_argument("--nav-title", "-nt", help="(For book) use titles in book navigation", action="store_true")
-	other.add_argument("--nav-side", "-ns", help="(For book) Make a sidebar with titles", action="store_true")
+	other.add_argument("--no-side", "-ns", help="(For book) Disable sidebar navigation", action="store_true")
 	other.add_argument("--no-side-toc", "-nst", help="(For book) disable TOC in sidebar (keep in doc)", action="store_true")
 	other.add_argument("--config", help="Use a configuration file (option=key values)", metavar="FILE")
 
@@ -703,6 +701,8 @@ def get_args():
 
 	
 	arg_dict = vars(parser.parse_args())
+
+	print(arg_dict)
 
 	#convert those ugly names to the nice ones
 	argsToSettings = {
@@ -719,7 +719,7 @@ def get_args():
 		'header': 'FILE_HEADER',
 		'footer': 'FILE_FOOTER',
 		'depth' : 'TOC_DEPTH',
-		'nav_side' : 'NAV_SIDEBAR',
+		'no_side' : 'NAV_SIDEBAR',
 		'no_nav' : 'USE_NAV',
 		'config' : 'CONFIG_FILE',
 		'no_side_toc' : 'NAV_SIDEBAR_TOC',
@@ -742,7 +742,8 @@ def get_args():
 				val = False if val else True 
 			if key == 'no_side_toc':
 				val = False if val else True 
-
+			if key == 'no_side':
+				val = False if val else True 
 
 			settings_args[argsToSettings[key]] = val 
 
@@ -926,6 +927,21 @@ class Pandy():
 				self._parseMerge()
 			else:
 				# book
+				if not self.format_from == 'markdown':
+					print(" Book only for markdown, sorry")
+					exit()
+
+				# check if there is html in the output formats. 
+				# If there are more than html or none, inform
+				if "html" not in self.format_to:
+					print ("  Book only works for HTML")
+					exit()
+
+				if len(self.format_to) > 1 and "html" in self.format_to:
+					answer = msg_cli_yesno("  Only HTML is being converted.")
+					if not answer:
+						exit()
+
 				if len(self.files) < 3:
 					print ("  Feed me more files to make something pretty :) . ")
 					exit()
@@ -942,22 +958,6 @@ class Pandy():
 						"Sorry, this is out of my league; check and run again")
 						exit()
 	 
-				# check if there is html in the output formats. 
-				# If there are more than html or none, inform
-				if "html" not in self.format_to:
-					print ("  Book only works for HTML")
-					exit()
-
-				if len(self.format_to) > 1 and "html" in self.format_to:
-					answer = msg_cli_yesno("  Only HTML is being converted.")
-					if not answer:
-						exit()
-
-				if self.settings['FILE_INDEX'] and not self.format_from == 'markdown':
-					print ("\n  If the custom index file contains wiki links, ",
-						"it should be in markdown. It appears that you haven't specified it.",
-						"The wiki links won't be parsed")
-
 				print ("  Parsing files and making book ... \n")
 				self._parseBook()
 
@@ -1487,6 +1487,8 @@ def orderListFromList(orderthis, fromthis, bythiscol):
 if __name__ == '__main__':
 
 	args = get_args()
+
+	exit()
 
 	print ("\n  ------------------ STARTING ------------------------------")
 	CONFIG = prepare_args(args)
