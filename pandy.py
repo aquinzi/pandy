@@ -693,60 +693,6 @@ def parse_wikilinks_mdreference(text, list_files):
 
 	return newtext, references	
 
-
-
-
-
-def makeNavigationLinks(links, href_active=None, toc_active='', files_tocs=None, output_key='path_output'):
-	"""make the whole book navigation: 
-
-	:links   a nested list (or tuple) as title, href
-	:href_selected    item to apply active class and insert toc 
-	:toc_active      toc for selected item
-	:files_tocs      all the tocs from project, for index 
-	:output_key      key to search/compare href to. For index 
-	"""
-
-	final = ""
-	anchor_tpl = '<a href="{href}">{title}</a>'
-
-	for link in links:
-		title = link[0]
-		href = link[1]
-		
-		info_active = ""
-		info_toc = ""
-
-		#sidebar 
-		if href_active is not None:
-			real_href = path_relative_to(href, href_active)
-			
-			if href == href_active:
-				info_active = " class='active'"
-				info_toc = toc_active
-		
-		#index 
-		if files_tocs is not None:
-			real_href = href
-
-			for key, findtoc in list(files_tocs.items()):
-				if key == "index":
-					continue
-				
-				if findtoc[output_key] == href:
-					#fix links so they point to page 
-					info_toc = findtoc['toc'].replace('<a href="#', '<a href="' + href + "#")
-
-					break
-
-		anchor = anchor_tpl.format(href=real_href, title=title)
-		li = "<li{active}>" + anchor + "{toc}</li>\n"
-		li = li.format(active=info_active, toc=info_toc)
-		
-		final += li
-
-	return "<ul>\n" + final + "</ul>"
-
 def extractMdLinks(text, extension="md", referencestyle=False):
 	"""Extract markdown links in text with extension. 
 	:text list 
@@ -1179,6 +1125,7 @@ class Pandy():
 		self.format_to   = config_dict['FORMAT_TO']
 		self.files       = []
 		self.command     = []
+		self.db_files = dict()
 
 		exts = tuple()
 		if self.format_from == "html":
@@ -1441,7 +1388,6 @@ class Pandy():
 		self.settings['FILE_INDEX'] = index_file
 		self._dbInit()
 
-
 		# process files 
 		for i in range(0, len(self.files)):
 			if 'index.' in self.db_files[self.files[i]]['path_input']:
@@ -1472,6 +1418,12 @@ class Pandy():
 			newcommand.append('--metadata=title:' + current['title'])
 			newcommand.append('--variable=project-title:' + self.db_files['index']['title'])
 
+			index_url = path_relative_to(os.path.join(self.output, 'index.html'),
+							current['path_output'])
+
+			tmp = '<a href="' + index_url +'">' +  self.db_files['index']['title'] + "</a>"
+			newcommand.append('--variable=project-index:' + tmp)
+
 			# navigations
 			if 'index.' in prev['path_input']:
 				prev = dict()
@@ -1482,9 +1434,8 @@ class Pandy():
 				                          prev['path_output'], prev['title'], 
 				                          nextt['path_output'], nextt['title'])
 
-			sidebar_navigation = makeNavigationLinks(self.listChapters, 
-				                  href_active=current['path_output_rootless'], toc_active=current['toc'])
-			
+			sidebar_navigation = self.makeNavigationLinks(href_active=current['path_output_rootless'])
+
 			if self.settings['NAV_SIDEBAR']:
 				newcommand.append('--variable=side_navigation:' + sidebar_navigation)
 
@@ -1504,14 +1455,9 @@ class Pandy():
 			self.db_files['index'] = self._fileParseBody(self.db_files['index'], index_cmd)
 
 		else:
-			self.db_files['index']['text'] = makeNavigationLinks(self.listChapters, 
-				                      files_tocs=self.db_files, output_key='path_output_rootless')
-
+			self.db_files['index']['text'] = self.makeNavigationLinks(isIndex=True)
 		index_cmd += ['-o', self.db_files['index']['path_output'], '--metadata=title:' + self.db_files['index']['title']]
 		run_subprocess(index_cmd, True, self.db_files['index']['text'])		
-
-
-
 
 	def _getOutputPath(self, filepath):
 		"""Get output path"""
@@ -1613,10 +1559,7 @@ class Pandy():
 	def _dbInit(self, index_path=None):
 		"""Init dbfiles with props """
 
-		self.db_files = dict()
-		tmp_listChap = list() # holds tuple: title, href
-		#tmp_path = os.path.join(self.output, "")
-		tmp_path = "output\\"
+		tmp_path = os.path.join(self.output, "")
 
 		self.db_files['index'] = {
 			'title': "Index",
@@ -1630,14 +1573,9 @@ class Pandy():
 			self.db_files[the_savior] = props 
 			
 			#remove root output path in outpath (mostly, wikilinks in index)
-			self.db_files[the_savior]['path_output_rootless'] = self.db_files[the_savior]['path_output']
 			self.db_files[the_savior]['path_output_rootless'] = self.db_files[the_savior]['path_output'].replace(tmp_path, "")
 			
 			relative = path_relative_to(props['path_output'], self.output, True)
-			tmp_listChap.append((props['title'], relative))
-
-		#list of titles in project with properties
-		self.listChapters = tmp_listChap
 
 		if os.path.exists(self.settings['FILE_INDEX']):
 			props = self._fileMetadata(self.settings['FILE_INDEX'])
@@ -1696,6 +1634,49 @@ class Pandy():
 			fileprops['toc'] = "<ul>" + this_toc + "</ul>"
 
 		return fileprops
+
+	def makeNavigationLinks(self, href_active=None, isIndex=False):
+		"""make the whole book navigation: 
+
+		:links   a nested list (or tuple) as title, href
+		:href_selected    item to apply active class and insert toc 
+		"""
+
+		final = ""
+		anchor_tpl = '<a href="{href}">{title}</a>'
+
+		for i in range(0, len(self.files)):
+			current = self.db_files[self.files[i]]
+
+			if current == "index":
+				continue			
+			
+			title = current['title']
+			href  = current['path_output_rootless']
+			
+			info_active = ""
+			info_toc    = ""
+
+			if not isIndex:
+				real_href = path_relative_to(href, href_active)
+				if href == href_active:
+					info_active = " class='active'"
+					info_toc = current['toc']
+			else:
+				real_href = href
+				info_toc = current['toc'].replace('<a href="#', '<a href="' + real_href + "#")
+
+			
+			anchor = anchor_tpl.format(href=real_href, title=title)
+			li = "<li{active}>" + anchor + "{toc}</li>\n"
+			li = li.format(active=info_active, toc=info_toc)
+			
+			final += li
+
+		return "<ul>\n" + final + "</ul>"
+
+
+
 
 
 if __name__ == '__main__':
