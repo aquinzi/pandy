@@ -566,14 +566,14 @@ def parse_internalLinks(text):
 	return textNew.split("<<<<SPLITMEOVERHERE>>>>")
 	
 def parse_wikilinks(text, list_files, output_key='path_output'):
-	"""Parse wikilinks (reference links but inverted): [filename][title]
-	[filename] can have extension or not. [title] is optional. If blank: searches title 
+	"""Parse wikilinks (reference links but inverted): [:filename][title]
+	[:filename] can have extension or not. [title] is optional. If blank: searches title 
 
 	:text   text as list 
 	:list_files  dictionary of files to search metadata in. (any key, just search in values)
 	:output_key   str dict key to look for ouput path value (for future path)
 
-	return processed text (as list) and references (string)
+	return processed text (list) and references (list)
 	"""
 
 	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
@@ -596,10 +596,10 @@ def parse_wikilinks(text, list_files, output_key='path_output'):
 			if filename in thisfile['path_input']:
 				future_path = thisfile[output_key]
 				if title:
-					future_title = title.strip()
+					future_title = title
 					break
 				if thisfile['title']:
-					future_title = thisfile['title'].strip()
+					future_title = thisfile['title']
 					break 
 
 		# create ref
@@ -611,7 +611,7 @@ def parse_wikilinks(text, list_files, output_key='path_output'):
 
 	# replace in text 
 	newtext = "<<<<SPLITMEOVERHERE>>>>".join(text)
-	search_tpl = "[{filename}][{title}]"
+	search_tpl = "[:{filename}][{title}]"
 	replace_tpl = "[{title}][{filename}]"
 
 	for link in new_links:
@@ -724,8 +724,9 @@ def makeNavigationLinks(links, title_active=None, toc_active='', files_tocs=None
 				info_toc = toc_active
 		
 		#index 
-		if files_tocs:
-			for findtoc in files_tocs:
+		if files_tocs is not None:
+			for key, findtoc in list(files_tocs.items()):
+
 				if path_getFilename(findtoc['path_output']) == href:
 					#fix links so they point to page 
 					info_toc = findtoc['toc'].replace('<a href="#', '<a href="' + href + "#")
@@ -752,7 +753,7 @@ def extractMdLinks(text, extension="md", referencestyle=False):
 	list_links = list()
 
 	expr_normal = "\[(.+?)?\]\((.+?\.(" + extension + "))\)"
-	expr_reference = "\[(.+?[\.(" + extension + ")]?)\]\[(|.+?)\]"
+	expr_reference = "\[:(.+?[\.(" + extension + ")]?)\]\[(|.+?)\]"
 
 	if referencestyle:
 		expr = r'' + expr_reference
@@ -762,8 +763,8 @@ def extractMdLinks(text, extension="md", referencestyle=False):
 	for line in text:
 		matches = re.findall(expr, line)
 		for m in matches:
-			title = m[0]
-			link  = m[1]
+			title = m[0].strip()
+			link  = m[1].strip()
 			if [title, link] not in list_links:
 				list_links.append([title, link])
 
@@ -781,13 +782,13 @@ def findTitleMd(filepath=None, text_lines=None):
 
 	for number, line in enumerate(the_text):
 		if line.startswith("% "):
-			return line[1:]
+			return line[1:].strip()
 		
 		if line.startswith("title: "):
 			tmp = line[7:]
 			if tmp.startswith(("'", '"')) and tmp.endswith(("'", '"')):
 				tmp = tmp[1:len(tmp) - 1]
-			return tmp
+			return tmp.strip()
 
 		if number == max_meta:
 			break 
@@ -797,7 +798,7 @@ def findTitleMd(filepath=None, text_lines=None):
 		if line.startswith("# "):
 			return line[1:]
 		if line.startswith("======="):
-			return the_text[number - 1]
+			return the_text[number - 1].strip()
 
 	return False
 
@@ -1496,8 +1497,7 @@ class Pandy():
 			self.db_files['index'] = self._fileParseBody(self.db_files['index'], index_cmd)
 
 		else:
-			tmp = [tmp.append(v) for k,v in list(self.db_files.items()) if not k == 'index']
-			self.db_files['index']['text'] = makeNavigationLinks(self.listChapters, files_tocs=tmp)
+			self.db_files['index']['text'] = makeNavigationLinks(self.listChapters, files_tocs=self.db_files)
 
 		index_cmd += ['-o', self.db_files['index']['path_output'], '--metadata=title:' + self.db_files['index']['title']]
 		run_subprocess(index_cmd, True, self.db_files['index']['text'])		
@@ -1626,7 +1626,6 @@ class Pandy():
 			relative = path_relative_to(props['path_output'], self.output, True)
 			tmp_listChap.append((props['title'], relative))
 
-
 		#list of titles in project with properties
 		self.listChapters = tmp_listChap
 
@@ -1654,7 +1653,7 @@ class Pandy():
 
 	def _fileParseBody(self, fileprops, cmd):
 
-		# Magic begins! (Get title and (parsed) body)
+		# Magic begins! 
 		cmd = list(cmd) 
 		cmd += ['-t', 'html']
 		
@@ -1675,16 +1674,11 @@ class Pandy():
 		cmd_text, references = parse_wikilinks(cmd_text, self.db_files, output_key='path_output_rootless')
 		cmd_text = "".join(cmd_text)
 		references = "\n\n".join(references)
-		cmd_text += "\n\n[id_pandy]: index.html\n\n" + references
+		cmd_text += "\n\n" + references
 
 		minimum = run_subprocess(cmd, True, cmd_text)
 		minimum = str(minimum, encoding='utf8')
-
-		# get the body (this is to also have the metadata; otherwise, 
-		# with --standalone it gets the body but not header-block)
-		#fileprops['text'] = htmlSplitter(minimum, 'body')
-		#properties['title'] = findTitleHtml(text_html=minimum, continueh1=True)
-		
+	
 		#extract toc
 		fileprops['toc'] = ""
 		this_toc, fileprops['text'] = getSplitTocBody(minimum)
@@ -1693,10 +1687,6 @@ class Pandy():
 			fileprops['toc'] = "<ul>" + this_toc + "</ul>"
 
 		return fileprops
-
-
-
-
 
 
 if __name__ == '__main__':
