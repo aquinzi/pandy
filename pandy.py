@@ -1418,10 +1418,7 @@ class Pandy():
 			newcommand.append('--metadata=title:' + current['title'])
 			newcommand.append('--variable=project-title:' + self.db_files['index']['title'])
 
-			index_url = path_relative_to(os.path.join(self.output, 'index.html'),
-							current['path_output'])
-
-			tmp = '<a href="' + index_url +'">' +  self.db_files['index']['title'] + "</a>"
+			tmp = '<a href="' + current['index_url'] +'">' +  self.db_files['index']['title'] + "</a>"
 			newcommand.append('--variable=project-index:' + tmp)
 
 			# navigations
@@ -1430,9 +1427,7 @@ class Pandy():
 				prev['path_output'] = ""
 				prev['title'] = ""
 
-			book_navigation = self._bookNavigation(current['path_output'], 
-				                          prev['path_output'], prev['title'], 
-				                          nextt['path_output'], nextt['title'])
+			book_navigation = self._bookNavigation(current, prev, nextt)
 
 			sidebar_navigation = self.makeNavigationLinks(href_active=current['path_output_rootless'])
 
@@ -1470,88 +1465,28 @@ class Pandy():
 		else:
 			return os.path.join(self.output, path_delExtension(filepath)[len(self.input) + 1:])
 
-	def _singleFileProperties(self, filepath, cmd=None, specials=False):
-		"""for book. Instead of object use this which returns a dictionary with:
-		output path, input path, title and text. Does the file processing and gets the title and html
-
-		cmd: the command as starting point 
-		specials: check for abbreviations, admonitions, toc
-		"""
-
-		#sketch
-		properties = {
-		          'path_output' : '', 'path_input' : '',
-		          'title' : '', 'text' : '',
-		          }
-
-		if filepath:
-			properties['path_input']  = filepath
-			properties['path_output'] = self._getOutputPath(filepath) + ".html"
-
-		properties['title'] = path_delExtension(path_getFilename(properties['path_output']))
-
-		if not cmd:
-			return properties
-
-		# Magic begins! (Get title and (parsed) body)
-		cmd = list(cmd) 
-		cmd += ['-t', 'html']
-
-		# remove the --template, this way can extract title easily
-		for index, item in enumerate(cmd):
-			if item.startswith("--template"):
-				del cmd[index]
-				break 			
-		
-		# treatment for specials 
-		if specials:
-			with cmd_open_write(properties['path_input'], 'r') as tmp:
-				cmd_text = tmp.readlines()
-
-			cmd_text, toc = if_special_elements(cmd_text, self.settings['TOC_TAG'])
-			cmd_text = "".join(cmd_text)
-
-			if toc and not "--toc" in cmd:
-				cmd.append('--toc')
-		else:
-			cmd_text = None 
-			cmd.append(properties['path_input'])
-
-		minimum = run_subprocess(cmd, True, cmd_text)
-		minimum = str(minimum, encoding='utf8')
-
-		# get the body (this is to also have the metadata; otherwise, 
-		# with --standalone it gets the body but not header-block)
-		properties['text'] = htmlSplitter(minimum, 'body')
-		properties['title'] = findTitleHtml(text_html=minimum, continueh1=True)
-		
-		return properties
-
-	def _bookNavigation(self, current_path, prev_path, prev_title, next_path, next_title):
+	def _bookNavigation(self, prop_current, prop_prev, prop_next):
 		""" Makes the navigation links """
 
 		navPre  = ""
 		navNext = ""
 		navIndex = ""
 
-		index_url = path_relative_to(os.path.join(self.output, 'index.html'),
-							current_path)
-
 		use_titles = self.settings['NAV_TITLE']
 		link_tpl = '<li><a href="{ref}">{title}</a></li>'
 
-		navIndex = link_tpl.format(ref=index_url, title="index")
+		navIndex = link_tpl.format(ref=prop_current['index_url'], title="index")
 
-		if prev_path:
-			prev_path = path_relative_to(prev_path, current_path)
+		if prop_prev['path_output']:
+			prev_path = path_relative_to(prop_prev['path_output'], prop_current['path_output'])
 
-			navLink = prev_title if use_titles else 'prev'	
+			navLink = prop_prev['title'] if use_titles else 'previous'	
 			navPre = link_tpl.format(ref=prev_path, title="&lt; " + navLink)
 
-		if next_path:
-			next_path = path_relative_to(next_path, current_path)
+		if prop_next['path_output']:
+			next_path = path_relative_to(prop_next['path_output'], prop_current['path_output'])
 
-			navLink = next_title if use_titles else 'next'
+			navLink = prop_next['title'] if use_titles else 'next'
 			navNext = link_tpl.format(ref=next_path, title=navLink + " &gt;")
 
 		return '<div class="nav"><ul>' + navPre + navIndex + navNext + '</ul></div>'
@@ -1575,23 +1510,21 @@ class Pandy():
 			#remove root output path in outpath (mostly, wikilinks in index)
 			self.db_files[the_savior]['path_output_rootless'] = self.db_files[the_savior]['path_output'].replace(tmp_path, "")
 			
-			relative = path_relative_to(props['path_output'], self.output, True)
-
 		if os.path.exists(self.settings['FILE_INDEX']):
 			props = self._fileMetadata(self.settings['FILE_INDEX'])
 			self.db_files['index']['title'] = props['title']
-
-
 
 	def _fileMetadata(self, filepath):
 		"""for book. Get file properties: output path, input path, md title """
 
 		properties = {'path_output' : '', 'path_input' : '', 'toc':'', 
-		             'title' : '', 'text': '', 'text_orig':'' }
+		             'title' : '', 'text': '', 'index_url': ''}
 
 		properties['path_input']  = filepath
 		properties['path_output'] = self._getOutputPath(filepath) + ".html"
 		properties['title'] = path_delExtension(path_getFilename(properties['path_output']))
+		properties['index_url'] = path_relative_to(
+				            os.path.join(self.output, 'index.html'), properties['path_output'])
 
 		tmp = findTitleMd(filepath)
 		if tmp:
