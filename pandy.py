@@ -1,14 +1,23 @@
 #! python3
 # "Wrapper" for Pandoc (python 3): pandy [file/folder] [from] [to] [other options]
-
+# pylint: disable=W0312, C0103, C0326, C0303
+#                 tab instead spaces, invalid names, space operators, trailing whitespace
+#
 # -*- coding: utf-8 -*-
 # tested for pandoc 1.12.3
+
+# remember: when parsing indiv. -o is the folder to save to
+
+
 
 # TOC wherever you want
 # prob split stuff instead of having one big file
 # Enable/disble extensions from cli
 # custom css/js: --include-in-header
- 
+#
+# wikilinks: fix when in sub and using [:file] to refer to one in root
+
+
 
 import sys
 
@@ -18,7 +27,6 @@ if sys.version_info[0] < 3:
 
 import argparse
 import subprocess
-import sys
 import os
 import codecs
 import re
@@ -66,7 +74,7 @@ _FORMATS_OUTPUT   = [
 	"slides", "slide", #options slides in another list
 	]
 
-_HIGHLIGHT_OPTIONS = ('pygments', 'kate', 'monochrome', 'espresso', 'zenburn', 
+_HIGHLIGHT_OPTIONS = ('pygments', 'kate', 'monochrome', 'espresso', 'zenburn',
                      'haddock', 'tango')
 _SLIDES_OPTIONS    = ('dzslides', 'slidy', 'reveal', 'slideous', 's5')
 
@@ -86,7 +94,7 @@ _COMMANDS_COMPLETE = {
 	'FILE_FOOTER'  : "--include-after-body=",
 	}
 
-# leave out mmd_title_block and use yaml_metadata_block. Activated by default 
+# leave out mmd_title_block and use yaml_metadata_block. Activated by default
 # and can include the variables easily in template
 EXTENSIONS_EXTRA  = ('link_attributes', 'hard_line_breaks')
 
@@ -186,7 +194,7 @@ def save(path, text):
 	with cmd as outputFile:
 		outputFile.write(text)
 
-def files_get(path, only_exts=(), exclude_files=[]):
+def files_get(path, only_exts=None, exclude_files=None):
 	""" Get a list of files in dir. Returns list 
 
 	:param:only_exts tuple to include only selected extensions (mainly for html pages saved
@@ -398,8 +406,6 @@ def if_special_elements_open(file_path, toc_tag):
 
 	return new_text, hasTOC
 
-
-
 def if_special_elements(text, toc_tag):
 	"""read text (as list) and process trough specials 
 	(admonitions, abbreviations, TOC tag, internallinks)
@@ -412,8 +418,6 @@ def if_special_elements(text, toc_tag):
 	text = parse_internalLinks(text)
 
 	return text, hasTOC
-
-
 
 def parse_abbreviations(text):
 	""" Find if file has abbreviations, if it does: parse as HTML. 
@@ -564,16 +568,18 @@ def parse_internalLinks(text):
 		textNew = textNew.replace(find_me, replace_me)
 
 	return textNew.split("<<<<SPLITMEOVERHERE>>>>")
-	
-def parse_wikilinks(text, list_files, output_key='path_output'):
+
+
+def parse_wikilinks(text, list_files):
 	"""Parse wikilinks (reference links but inverted): [:filename][title]
-	[:filename] can have extension or not. [title] is optional. If blank: searches title 
+	[:filename] can have extension or not.
+	[title] is optional. If blank: searches title
 
-	:text   text as list 
-	:list_files  dictionary of files to search metadata in. (any key, just search in values)
-	:output_key   str dict key to look for ouput path value (for future path)
+	:text   text as list
+	:list_files  dict of files: any key and holding (minimum):
+	                     path_input, title, output ("future path")
 
-	return processed text (list) and references (list)
+	return processed text (list) and references (list) of the file
 	"""
 
 	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
@@ -588,26 +594,28 @@ def parse_wikilinks(text, list_files, output_key='path_output'):
 	for link in links:
 		filename = link[0]
 		title    = link[1]
-		future_path   = ""
-		future_title   = ""
+		future_path  = ""
+		future_title = ""
 
 		# find output and title
 		for key, thisfile in list(list_files.items()):
 			if filename in thisfile['path_input']:
-				future_path = thisfile[output_key]
+				future_path = thisfile['output']
 				if title:
 					future_title = title
 					break
 				if thisfile['title']:
 					future_title = thisfile['title']
 					break 
-
+		
 		# create ref
 		tmp = ref_tpl.format(thefile=filename, future_html=future_path)
 		if not tmp in references:
 			references.append(tmp)
 
-		new_links.append([filename, title, future_title])
+		tmp = [filename, title, future_title]
+		if not tmp in new_links:
+			new_links.append([filename, title, future_title])
 
 	# replace in text 
 	newtext = "<<<<SPLITMEOVERHERE>>>>".join(text)
@@ -626,72 +634,7 @@ def parse_wikilinks(text, list_files, output_key='path_output'):
 
 	return newtext, references	
 
-def parse_wikilinks_mdreference(text, list_files):
-	"""Parse wikilinks (reference links): [title][filename] or [filename][]
-	[filename] can have extension or not. 
 
-	:text   text as list 
-	:list_files  dictionary of files to search metadata in. (any key, just search in values)
-
-	return processed text (as list) and references (string)
-	"""
-
-	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
-	links = extractMdLinks(text, extension=extensions, referencestyle=True)
-
-	references = list()
-	ref_tpl = "[{thefile}]: {future_html}"
-	
-	#hold filename, title_old and title_new. For later text replacement
-	new_links = list()   
-
-	for link in links:
-		if not link[1]:
-			# [ref][]
-			filename = link[0]
-			title    = link[1]
-		else:
-			#[title][ref]
-			title = link[0]
-			filename    = link[1]
-
-		future_path   = ""
-		future_title   = ""
-
-		# find output and title
-		for key, thisfile in list(list_files.items()):
-			if filename in thisfile['path_input']:
-				future_path = thisfile['path_output']
-				if title:
-					future_title = title
-					break
-				if thisfile['title']:
-					future_title = thisfile['title']
-					break 
-
-		# create ref
-		tmp = ref_tpl.format(thefile=filename, future_html=future_path)
-		references.append(tmp)
-
-		new_links.append([filename, title, future_title])
-
-	return references	
-	# replace in text 
-	newtext = "<<<<SPLITMEOVERHERE>>>>".join(text)
-	search_tpl = "[{filename}][{title}]"
-	replace_tpl = "[{title}][{filename}]"
-
-	for link in new_links:
-		filename = link[0]
-		title_old = link[1]
-		title_new = link[2]
-		newtext = newtext.replace(
-			search_tpl.format(filename=filename, title=title_old), 
-			replace_tpl.format(filename=filename, title=title_new))
-
-	newtext = newtext.split("<<<<SPLITMEOVERHERE>>>>")
-
-	return newtext, references	
 
 def extractMdLinks(text, extension="md", referencestyle=False):
 	"""Extract markdown links in text with extension. 
@@ -724,13 +667,17 @@ def extractMdLinks(text, extension="md", referencestyle=False):
 	return list_links
 
 def findTitleMd(filepath=None, text_lines=None):
+	"""Find title in markdown file. All possibilities (% , title: # and =====)
+	:filepath   path to open file 
+	:text_lines   text in list
+	"""
+
 	if filepath:
 		with cmd_open_write(filepath, 'r') as tmp:
 			the_text = tmp.readlines()
 	if text_lines:
 		the_text = text_lines
 
-	this_title = ""
 	max_meta = 30 #max lines to look for metadata title
 
 	for number, line in enumerate(the_text):
@@ -790,59 +737,78 @@ class ValueCorrect(argparse.Action):
 def get_args():
 	""" Args parsing and translation to nice configs"""
 
-	description = help_replaceStringFormats(_MY_DESCRIPTION, ['{{ _FORMATS_OUTPUT }}', '{{ _FORMATS_BOTHWAYS }}'])
-
-	parser = argparse.ArgumentParser(add_help=False, usage=_MY_USAGE, description=description,
-		                    formatter_class=argparse.RawTextHelpFormatter) 
+	parser = argparse.ArgumentParser(add_help=False, usage=_MY_USAGE 
+		        , description=help_replaceStringFormats(_MY_DESCRIPTION, 
+		        	            ['{{ _FORMATS_OUTPUT }}', '{{ _FORMATS_BOTHWAYS }}'])
+		        , formatter_class=argparse.RawTextHelpFormatter) 
 
 	required = parser.add_argument_group(' Required')
-	required.add_argument("source",      action=InputExist,   help="file, folder, .list or config file")
+	required.add_argument("source", action=InputExist, help="file, folder, .list or config file")
 	
 	option_file = parser.add_argument_group(' Options:\n\n file related')
 	option_file.add_argument("--from", '-f', action=ValueCorrect, help="Convert from this")
-	option_file.add_argument("--to", '-t',  action=ValueCorrect, help="Convert to this (can be a list)", nargs='+')
+	option_file.add_argument("--to", '-t',   action=ValueCorrect, nargs='+', 
+		    help="Convert to this (can be a list)")
 
 	option_file.add_argument("--output", "-o", help="Output folder", metavar="FOLDER")
 	option_file.add_argument("--flat", action='store_true', help="Don't keep folder structure")
 	option_file.add_argument("--self", help="self contained file", action='store_true')	
-	option_file.add_argument("--header", help="Header file. Included as it is (raw, verbatim)", metavar="FILE")
-	option_file.add_argument("--footer", help="Footer file. Included as it is (raw, verbatim)", metavar="FILE")
-	option_file.add_argument("--html4", help="Use html4 output instead of html5", action="store_true")
-	option_file.add_argument("--slides", help="Slides format. Options: " + ", ".join(_SLIDES_OPTIONS) + ". Default: %(default)s", choices=_SLIDES_OPTIONS, default=_DEFAULT_CONFIG['SLIDES'], metavar="")
+	option_file.add_argument("--header", metavar="FILE", 
+		    help="Header file. Included as it is (raw, verbatim)")
+	option_file.add_argument("--footer", metavar="FILE", 
+		    help="Footer file. Included as it is (raw, verbatim)")
+	option_file.add_argument("--html4", action="store_true", 
+		    help="Use html4 output instead of html5")
+	option_file.add_argument("--slides", choices=_SLIDES_OPTIONS, metavar="",
+		    help="Slides format. Options: " + ", ".join(_SLIDES_OPTIONS) + ". Default: %(default)s",  
+		    default=_DEFAULT_CONFIG['SLIDES'])
 	option_file.add_argument("--bib", help="Use bibliography file", metavar="FILE")
 
 	exclusive = option_file.add_mutually_exclusive_group()
-	exclusive.add_argument("--merge", "-m", action="store_true", help="Merge files.")
-	exclusive.add_argument("--book", "-b", action="store_true", help="Make a book with navigation (next/prev) and index")
+	exclusive.add_argument("--merge", "-m", action="store_true", help="Merge files")
+	exclusive.add_argument("--book", "-b",  action="store_true", 
+		    help="Make a book with navigation (next/prev) and index")
 
 	style = parser.add_argument_group(' styling')
 	style.add_argument("--css", help="External CSS", metavar="FILE")
 
-	style.add_argument("--highlight", choices=_HIGHLIGHT_OPTIONS, default=_DEFAULT_CONFIG['HIGHLIGHT'], help="Highlight style. Options: " + ", ".join(_HIGHLIGHT_OPTIONS) + ". Default: %(default)s", metavar="")
+	style.add_argument("--highlight", choices=_HIGHLIGHT_OPTIONS,  metavar="",
+		    default=_DEFAULT_CONFIG['HIGHLIGHT'], 
+		    help="Highlight style. Options: " + ", ".join(_HIGHLIGHT_OPTIONS) + ". Default: %(default)s")
 	style.add_argument("--highlight-no", help="No highlight", action='store_true')
-	style.add_argument("--tpl", help="Template file. Can enter 'default' for pandoc's default.", metavar="FILE")
+	style.add_argument("--tpl", metavar="FILE",
+		    help="Template file. Can enter 'default' for pandoc's default.")
 
 	other = parser.add_argument_group(' other')
 	other.add_argument("--toc", help="include TOC", action='store_true')
-	other.add_argument("--depth", help="TOC depth. Choices: 1, 2, 3, 4, 5, 6. Default: %(default)s", type=int, choices=[1, 2, 3, 4, 5, 6], default=_DEFAULT_CONFIG['TOC_DEPTH'], metavar="")
-	other.add_argument("--hide", action='store_true', help="e-mail obfuscation (default none, true = references)")
-	other.add_argument("--sections", action='store_true', help="Wrap sections in <sections>, attach identifiers instead of titles")
+	other.add_argument("--depth", type=int, choices=[1, 2, 3, 4, 5, 6], metavar="",
+		    help="TOC depth. Choices: 1, 2, 3, 4, 5, 6. Default: %(default)s", 
+		    default=_DEFAULT_CONFIG['TOC_DEPTH'])
+	other.add_argument("--hide", action='store_true', 
+		    help="e-mail obfuscation (default none, true = references)")
+	other.add_argument("--sections", action='store_true', 
+		    help="Wrap sections in <sections>, attach identifiers instead of titles")
+	other.add_argument("--config", metavar="FILE", 
+		    help="Use a configuration file (option=key values)")
 
-	other.add_argument("--no-nav", "-nn", help="(For book) disable book navigation", action="store_true")
-	other.add_argument("--nav-title", "-nt", help="(For book) use titles in book navigation", action="store_true")
-	other.add_argument("--no-side", "-ns", help="(For book) Disable sidebar navigation", action="store_true")
-	other.add_argument("--no-side-toc", "-nst", help="(For book) disable TOC in sidebar (keep in doc)", action="store_true")
-	other.add_argument("--config", help="Use a configuration file (option=key values)", metavar="FILE")
+	other.add_argument("--no-nav", "-nn", action="store_true", 
+		    help="(For book) disable book navigation")
+	other.add_argument("--nav-title", "-nt", action="store_true", 
+		    help="(For book) use titles in book navigation")
+	other.add_argument("--no-side", "-ns", action="store_true", 
+		    help="(For book) Disable sidebar navigation")
+	other.add_argument("--no-side-toc", "-nst", action="store_true", 
+		    help="(For book) disable TOC in sidebar (keep in doc)")
 
 	pandoc = parser.add_argument_group(' Pandoc')
-	pandoc.add_argument("--pandoc",   default=_DEFAULT_CONFIG['PANDOC'], help="Pandoc path. Default: %(default)s")
+	pandoc.add_argument("--pandoc",   default=_DEFAULT_CONFIG['PANDOC'], 
+		    help="Pandoc path. Default: %(default)s")
 	pandoc.add_argument("--data-dir", default="", help="Data directory", metavar="FOLDER")
 
 	nocateg = parser.add_argument_group(' Last but not least')
 	nocateg.add_argument("--help", "-h", help="show this help message and exit", action="help") 
 	nocateg.add_argument('--version', action='version', version='%(prog)s ' + __version__)
 
-	
 	arg_dict = vars(parser.parse_args())
 
 	#convert those ugly names to the nice ones
@@ -866,29 +832,35 @@ def get_args():
 		'no_side_toc' : 'NAV_SIDEBAR_TOC',
 		'from': 'FORMAT_FROM',
 		'to': 'FORMAT_TO',
-		}
 
-	#just convert to uppercase
-	options_noNameChange = ('pandoc', 'highlight', 'slides', 'source', 'sections',
-		             'toc', 'merge', 'book', 'highlight_no') 
+		#convert to upper
+		'pandoc': 'PANDOC',
+		'highlight': 'HIGHLIGHT',
+		'slides': 'SLIDES',
+		'source': 'SOURCE',
+		'sections': 'SECTIONS',
+		'toc': 'TOC',
+		'merge': 'MERGE',
+		'book': 'BOOK',
+		'highlight_no': 'HIGHLIGHT_NO',
+		}
 
 	settings_args = dict()
 
+	def toggleBool(val):
+		if val:
+			return False 
+		return True 
+
 	# transfer & translate
 	for key, val in arg_dict.items():
-		if key in options_noNameChange:
-			settings_args[key.upper()] = val 
-		else:
-			if key == "html4":
-				val = 'html' if val else 'html5'
-			if key == 'no_nav':
-				val = False if val else True 
-			if key == 'no_side_toc':
-				val = False if val else True 
-			if key == 'no_side':
-				val = False if val else True 
+		if key == "html4":
+			val = 'html' if val else 'html5'
 
-			settings_args[argsToSettings[key]] = val 
+		if key in ('no_nav', 'no_side_toc', 'no_side'):
+			val = toggleBool(val)
+
+		settings_args[argsToSettings[key]] = val 
 
 	if settings_args['SOURCE'] == ".":
 		settings_args['SOURCE'] = os.getcwd()
@@ -929,7 +901,7 @@ def prepare_args(arg_dict):
 	# Check option belonging, replace special keys, etc 
 	# if pdf, warn that needs latex 
 	if "pdf" in settings_final['FORMAT_TO']:
-		answer = msg_cli_yesno("  To convert to PDF needs LaTeX installed (and in PATH).")
+		answer = msg_cli_yesno("  To convert to PDF needs LaTeX installed (and in PATH)")
 		if not answer:
 			exit()
 
@@ -945,7 +917,9 @@ def prepare_args(arg_dict):
 
 	#Special belonging if not book, just to clean up
 	if not settings_final['BOOK']:
-		if settings_final['NAV_TITLE'] or settings_final['NAV_SIDEBAR'] or settings_final['USE_NAV']:
+		if (settings_final['NAV_TITLE'] or settings_final['NAV_SIDEBAR'] 
+			or settings_final['USE_NAV']):
+
 			settings_final['NAV_TITLE']   = False
 			settings_final['NAV_SIDEBAR'] = False
 			settings_final['USE_NAV']     = False
@@ -957,6 +931,11 @@ def prepare_args(arg_dict):
 # =================================
 
 def htmlSplitter(text, tag, special_start=None, find=False):
+	"""Split html, getting only what is in tag 
+	
+	:special_start if beginning has id or class 
+	:find  if not found, return None 
+	"""
 	
 	tpl_start = "<" + tag + ">"
 	if special_start:
@@ -971,64 +950,28 @@ def htmlSplitter(text, tag, special_start=None, find=False):
 
 	return splitting[1].split(tpl_end)[0]
 
-def findTitleHtml(filepath=None, pandocpath=None, text_md=None, text_html=None, continueh1=False):
-	"""Find the title in HTML. First with <title>, then first <h1>"""
-
-	the_title = ""
-	if not filepath and text_md is None and text_html is None:
-		# how do you me want to work!?!?!
-		return the_title
-
-	if filepath:
-		the_title = path_delExtension(path_getFilename(filepath))
-
-	if pandocpath is None and text_md is None and text_html is None:
-		#why did you even bother....
-		return the_title
-
-	if text_html is None and text_md is None and filepath is None:
-		# I dont do magic 
-		return the_title
-
-	if text_html is None:
-		if text_md is None:
-			text_md = cmd_open_file(filepath)
-
-		if not filepath.endswith(".html"):
-			print(",mdfgdfgdflgdfkj ")
-			
-			command = [pandocpath, '--standalone', '-t', 'html']
-			text_html = run_subprocess(command, True, text_md)
-			text_html = str(text_html, encoding='utf8')
-		else:
-			text_html = text_md
-
-	html_pieces = text_html.split("<body>")
-	title_html = html_pieces[0].split("<title>")[1].strip()
-	title_html = title_html.split("</title>")[0].replace(os.linesep, '')
-
-	if title_html:
-		return title_html
-
-	if continueh1:
-		title_h1 = htmlSplitter(html_pieces[1], "h1", special_start="<h1 ", find=True)
-		if not title_h1:
-			return the_title
-
-		return title_h1.split(">")[1]
-
-	return the_title
-
-def getSplitTocBody(html):
+def getSplitTocBody(html, html_ver):
 	"""Returns the TOC list and the rest of the html body.
 	(splitting from <body>)
+
+	toc    str 
+	body   str, whatever after toc
+
+	:html_ver   for toc splitting.
+	            html5 -> nav 
+	            html -> div 
 	"""
 
 	text = htmlSplitter(html, 'body')
-
-	if not '<div id="TOC">' in text:
-		return '', text.split('</div>')[1]
 	
+	toc_tag = "nav"
+	if not html_ver == "html5":
+		toc_tag = "div"
+
+	if not 'id="TOC">' in text:
+		print("no toc ")
+		return '', text.split('</' + toc_tag + '>')[1]
+
 	text = text.split('<div id="TOC">')[1]
 	text_parts = text.split('</div>')
 	body = text_parts[1]
@@ -1112,29 +1055,29 @@ def help_replaceStringFormats(string, placeholders):
 # == Pandy! ====
 # ==============
 
-class Pandy():
+class Pandy(object):
 	"""Handles the parsing and related """
 
 	def __init__(self, config_dict):
 		""" Preparation, config_dict must been checked and translated before """
 
-		self.settings    = config_dict
-		self.input       = config_dict['SOURCE']
-		self.output      = config_dict['OUTPUT_PATH']
-		self.format_from = config_dict['FORMAT_FROM']
-		self.format_to   = config_dict['FORMAT_TO']
-		self.files       = []
-		self.command     = []
-		self.db_files = dict()
+		self.settings        = config_dict
+		self.input           = config_dict['SOURCE']
+		self.output          = config_dict['OUTPUT_PATH']
+		self.format_from     = config_dict['FORMAT_FROM']
+		self.format_to       = config_dict['FORMAT_TO']
+		self.files           = []
+		self.command         = []
+		self.db_files        = dict()
+		self.references_list = dict()
+		self.references_all  = ""
 
 		exts = tuple()
 		if self.format_from == "html":
 			exts = (".html", ".htm")
 
-		excl = [DEFAULT_INI_NAME]
+		self.files = files_list(self.input, only_exts=exts, exclude_files=[DEFAULT_INI_NAME])
 
-		self.files = files_list(self.input, only_exts=exts, exclude_files=excl)
-		
 		# find index. file
 		i = 0
 		total = len(self.files)
@@ -1142,20 +1085,20 @@ class Pandy():
 			if "index." in self.files[i]:
 				self.settings['FILE_INDEX'] = self.files[i]
 				del self.files[i]
-				break 
+				break
 			i += 1
 
 		self.format_from, self.format_to = check_synonyms(self.format_from, self.format_to)
 
-		# make base pandoc command. 
+		# make base pandoc command
 		self.command.append(self.settings['PANDOC'])
 		self.command.append('--standalone')  # complete html --standalone
 
 		# Exclude: do not treat right now or already done
-		exclude = ("FORMAT_TO", "FORMAT_FROM", "SOURCE", "OUTPUT_PATH", 
-			"OUTPUT_FLAT", "MERGE", "SLIDES", "BOOK", "HTML_VER", "PANDOC", "FILE_INDEX" )
+		exclude = ("FORMAT_TO", "FORMAT_FROM", "SOURCE", "OUTPUT_PATH", "MERGE",
+			"OUTPUT_FLAT", "SLIDES", "BOOK", "HTML_VER", "PANDOC", "FILE_INDEX")
 
-		# Add the options 
+		# Add the options
 		for key, val in self.settings.items():
 			if key in exclude:
 				continue
@@ -1163,7 +1106,7 @@ class Pandy():
 
 		self.command += self._cmdFromToOut('f', self.format_from)
 
-		# and run! 
+		# and run!
 		self.run()
 
 	def _cmdFromToOut(self, way, markup, outputpath=None):
@@ -1265,107 +1208,75 @@ class Pandy():
 			print (" Converting: " + path_getFilename(filey))
 
 			for ext in self.format_to:
-				if not ext == "html":
-					stdin = False 
-					is_from = [filey] 
-				else:
-					stdin = True 
-					is_from, toc = if_special_elements_open(filey, self.settings['TOC_TAG'])
-
-					if toc and not "--toc" in newcommand:
-						newcommand.append('--toc')
 
 				cmd_to  = self._cmdFromToOut('t', ext)
 				cmd_out = self._cmdFromToOut('o', ext, path) 
 				newcommand += cmd_to + cmd_out
 
-				if not stdin:
-					newcommand += is_from
-					run_subprocess(newcommand)
-				else:
-					run_subprocess(newcommand, True, is_from)
+				self._processOneFile(filey, newcommand, ext)
 
 	def _parseMerge(self):
 		""" pandoc already has a merge command when specified multiple files. 
-		Special treatment for HTML output """
+		Special treatment for markdown input to html output"""
 
 		if not self.output:
 			self.output = os.getcwd()
 
 		name = path_lastDir(self.input)
-		path = os.path.join(self.output, name)
 
-		default_template = "--template=default.html5"
-		meta_name = "--metadata=title:" + name
+		meta_name        = "--metadata=title:" + name
 		
 		for ext in self.format_to:
 			command_base = list(self.command)
 
-			cmd_out = self._cmdFromToOut('o', ext, path) 
 			command_base += self._cmdFromToOut('t', ext)
+			command_base += self._cmdFromToOut('o', ext, os.path.join(self.output, name)) 
+			command_base += [meta_name]
 
-			if "--standalone" in command_base:
-				wasStandalone = "--standalone"
+			self._processOneFile(self.files, command_base, ext)
+
+	def _processOneFile(self, filey, cmd, ext_to):
+		"""Process one file separatelly (for merge and individually)
+		:filey     one file or file list 
+		:cmd       command starting point 
+		:ext_to    current extension in format to
+		"""
+
+		this_cmd = list(cmd)
+
+		if not ext_to == 'html' or (ext_to == 'html' and not self.format_from == 'markdown'):
+			if isinstance(filey, list):
+				this_cmd += filey
 			else:
-				wasStandalone = False 
+				this_cmd += [filey] 
 
-			if "--toc" in command_base:
-				wasTOC = True 
+			run_subprocess(this_cmd)
+		else:
+			cmd_special = list(this_cmd)
+			#merge 
+			if isinstance(filey, list):
+				# join  all texts
+				all_texts = list()
+				for this_file in filey:
+					with cmd_open_write(this_file, 'r') as tmp:
+						all_texts += tmp.readlines()
+			# individual
 			else:
-				wasTOC = False
+				with cmd_open_write(filey, 'r') as tmp:
+					all_texts = tmp.readlines()
+
+			all_texts, toc = if_special_elements(all_texts, self.settings['TOC_TAG'])
+			if toc:
+				cmd_special.append('--toc')
+
+			all_texts = "".join(all_texts)
+			run_subprocess(cmd_special, True, all_texts)		
 
 
-			if not ext == "html":
-				command_base += [self.files] + cmd_out + [meta_name]
-				run_subprocess(command_base)
-			else:
-				# remove template to have less clutter
-				template = ""
-				for index in range(len(command_base)):
-					if command_base[index].startswith("--template"):
-						template = command_base[index]
-						del command_base[index]
-						break 
 
-				# activate default template to have TOC
-				if wasTOC:
-					command_base.append(default_template)
-				elif wasStandalone:
-					#remove everything to make it a fragment
-					command_base.remove(wasStandalone)
 
-				# now process
-				merged_files = ""
-				all_bodies   = ""
-				all_tocs     = ""
 
-				for thisFile in self.files:
-					
-					new_text, toc = if_special_elements_open(thisFile, self.settings['TOC_TAG'])		
-					new_text = run_subprocess(command_base, True, new_text)
 
-					if not wasTOC:
-						merged_files += new_text
-					else:
-						toc, body   = getSplitTocBody(new_text)
-						all_tocs   += toc 
-						all_bodies += body 
-
-				# go back to full HTML
-				if wasTOC:
-					command_base.remove(default_template)
-					all_tocs = '<div id="TOC">\n' + all_tocs + '\n</div>'
-					merged_files = all_tocs + all_bodies
-				
-				if wasStandalone:
-					command_base.append(wasStandalone)
-
-				if template:
-					command_base.append(template)
-
-				# finally save
-				newcommand = command_base + cmd_out + [meta_name]
-				run_subprocess(newcommand, True, merged_files)
 
 	def _parseBook(self):
 		"""Make a book with navigation between files """
@@ -1402,7 +1313,7 @@ class Pandy():
 				nextt = self.db_files[self.files[i + 1]]
 			else: 
 				nextt = dict() 
-				nextt['path_output'] = ""
+				nextt['real_output'] = ""
 				nextt['title']       = ""		
 
 			newcommand = list(self.command)
@@ -1410,9 +1321,9 @@ class Pandy():
 			#finish processing text
 			current = self._fileParseBody(current, newcommand)
 
-			newcommand += ['-t', 'html', '-o', current['path_output']]
+			newcommand += ['-t', 'html', '-o', current['real_output']]
 
-			path_mkdir(path_get(current['path_output']))
+			path_mkdir(path_get(current['real_output']))
 
 			# re add title (for <title> and first heading)
 			newcommand.append('--metadata=title:' + current['title'])
@@ -1424,12 +1335,12 @@ class Pandy():
 			# navigations
 			if 'index.' in prev['path_input']:
 				prev = dict()
-				prev['path_output'] = ""
+				prev['real_output'] = ""
 				prev['title'] = ""
 
 			book_navigation = self._bookNavigation(current, prev, nextt)
 
-			sidebar_navigation = self.makeNavigationLinks(href_active=current['path_output_rootless'])
+			sidebar_navigation = self.makeNavigationLinks(href_active=current['output'])
 
 			if self.settings['NAV_SIDEBAR']:
 				newcommand.append('--variable=side_navigation:' + sidebar_navigation)
@@ -1451,19 +1362,27 @@ class Pandy():
 
 		else:
 			self.db_files['index']['text'] = self.makeNavigationLinks(isIndex=True)
-		index_cmd += ['-o', self.db_files['index']['path_output'], '--metadata=title:' + self.db_files['index']['title']]
+		index_cmd += ['-o', self.db_files['index']['real_output'], '--metadata=title:' + self.db_files['index']['title']]
 		run_subprocess(index_cmd, True, self.db_files['index']['text'])		
 
-	def _getOutputPath(self, filepath):
+	def _getOutputPath(self, filepath, strip_root=False):
 		"""Get output path"""
 
 		if not self.output:
 			return path_delExtension(filepath)
 
+		cooking = ""
+
 		if self.settings['OUTPUT_FLAT'] or (not self.settings['OUTPUT_FLAT'] and filepath == self.input):
-			return os.path.join(self.output, path_delExtension(path_getFilename(filepath)))
+			cooking = path_delExtension(path_getFilename(filepath))
 		else:
-			return os.path.join(self.output, path_delExtension(filepath)[len(self.input) + 1:])
+			cooking = path_delExtension(filepath)[len(self.input) + 1:]
+
+		if strip_root:
+			return cooking
+		
+		return os.path.join(self.output, cooking)
+
 
 	def _bookNavigation(self, prop_current, prop_prev, prop_next):
 		""" Makes the navigation links """
@@ -1477,14 +1396,14 @@ class Pandy():
 
 		navIndex = link_tpl.format(ref=prop_current['index_url'], title="index")
 
-		if prop_prev['path_output']:
-			prev_path = path_relative_to(prop_prev['path_output'], prop_current['path_output'])
+		if prop_prev['real_output']:
+			prev_path = path_relative_to(prop_prev['real_output'], prop_current['real_output'])
 
 			navLink = prop_prev['title'] if use_titles else 'previous'	
 			navPre = link_tpl.format(ref=prev_path, title="&lt; " + navLink)
 
-		if prop_next['path_output']:
-			next_path = path_relative_to(prop_next['path_output'], prop_current['path_output'])
+		if prop_next['real_output']:
+			next_path = path_relative_to(prop_next['real_output'], prop_current['real_output'])
 
 			navLink = prop_next['title'] if use_titles else 'next'
 			navNext = link_tpl.format(ref=next_path, title=navLink + " &gt;")
@@ -1494,11 +1413,9 @@ class Pandy():
 	def _dbInit(self, index_path=None):
 		"""Init dbfiles with props """
 
-		tmp_path = os.path.join(self.output, "")
-
 		self.db_files['index'] = {
 			'title': "Index",
-			'path_output' : os.path.join(self.output, "index.html"),
+			'real_output' : os.path.join(self.output, "index.html"),
 			'path_input' :self.settings['FILE_INDEX'],
 		     }
 
@@ -1506,25 +1423,32 @@ class Pandy():
 
 			props = self._fileMetadata(the_savior)
 			self.db_files[the_savior] = props 
-			
-			#remove root output path in outpath (mostly, wikilinks in index)
-			self.db_files[the_savior]['path_output_rootless'] = self.db_files[the_savior]['path_output'].replace(tmp_path, "")
+
+			# create references, with and without extension
+			self.references_list[the_savior] = self.db_files[the_savior]['output']
+			self.references_list[path_delExtension(the_savior)] =  self.db_files[the_savior]['output']
 			
 		if os.path.exists(self.settings['FILE_INDEX']):
 			props = self._fileMetadata(self.settings['FILE_INDEX'])
 			self.db_files['index']['title'] = props['title']
 
+		ref_tpl = "[{thefile}]: {future_html}\n\n"
+		for title, path in list(self.references_list.items()):
+			tmp = ref_tpl.format(thefile=title, future_html=path)
+			self.references_all += tmp 
+
 	def _fileMetadata(self, filepath):
 		"""for book. Get file properties: output path, input path, md title """
 
-		properties = {'path_output' : '', 'path_input' : '', 'toc':'', 
+		properties = {'real_output' : '', 'path_input' : '', 'toc':'', 
 		             'title' : '', 'text': '', 'index_url': ''}
 
 		properties['path_input']  = filepath
-		properties['path_output'] = self._getOutputPath(filepath) + ".html"
-		properties['title'] = path_delExtension(path_getFilename(properties['path_output']))
-		properties['index_url'] = path_relative_to(
-				            os.path.join(self.output, 'index.html'), properties['path_output'])
+		properties['real_output'] = self._getOutputPath(filepath) + ".html"
+		properties['output']      = self._getOutputPath(filepath, strip_root=True) + ".html"
+		properties['title']       = properties['output']
+		properties['index_url']   = path_relative_to(
+				            os.path.join(self.output, 'index.html'), properties['real_output'])
 
 		tmp = findTitleMd(filepath)
 		if tmp:
@@ -1551,8 +1475,9 @@ class Pandy():
 		cmd.append('--toc')
 		cmd_text, toc = if_special_elements(cmd_text, self.settings['TOC_TAG'])
 
-		cmd_text, references = parse_wikilinks(cmd_text, self.db_files, output_key='path_output_rootless')
+		cmd_text, references = parse_wikilinks(cmd_text, self.db_files)
 		cmd_text = "".join(cmd_text)
+
 		references = "\n\n".join(references)
 		cmd_text += "\n\n" + references
 
@@ -1561,17 +1486,17 @@ class Pandy():
 	
 		#extract toc
 		fileprops['toc'] = ""
-		this_toc, fileprops['text'] = getSplitTocBody(minimum)
+		this_toc, fileprops['text'] = getSplitTocBody(minimum, html_ver=self.settings['HTML_VER']) 
 
 		if this_toc:
 			fileprops['toc'] = "<ul>" + this_toc + "</ul>"
 
 		return fileprops
 
+
 	def makeNavigationLinks(self, href_active=None, isIndex=False):
 		"""make the whole book navigation: 
 
-		:links   a nested list (or tuple) as title, href
 		:href_selected    item to apply active class and insert toc 
 		"""
 
@@ -1585,7 +1510,7 @@ class Pandy():
 				continue			
 			
 			title = current['title']
-			href  = current['path_output_rootless']
+			href  = current['output']
 			
 			info_active = ""
 			info_toc    = ""
@@ -1599,7 +1524,6 @@ class Pandy():
 				real_href = href
 				info_toc = current['toc'].replace('<a href="#', '<a href="' + real_href + "#")
 
-			
 			anchor = anchor_tpl.format(href=real_href, title=title)
 			li = "<li{active}>" + anchor + "{toc}</li>\n"
 			li = li.format(active=info_active, toc=info_toc)
