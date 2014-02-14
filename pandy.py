@@ -566,12 +566,12 @@ def parse_internalLinks(text):
 
 	return textNew.split("<<<<SPLITMEOVERHERE>>>>")
 	
-def parse_wikilinks(text, list_files):
+def parse_wikilinks_ownsyntax(text, list_files):
 	"""Parse wikilinks (reference links but inverted): [filename][title]
 	[filename] can have extension or not. [title] is optional. If blank: searches title 
 
 	:text   text as list 
-	:list_files  list of files to search metadata in 
+	:list_files  dictionary of files to search metadata in. (any key, just search in values)
 
 	return processed text (as list) and references (string)
 	"""
@@ -579,11 +579,12 @@ def parse_wikilinks(text, list_files):
 	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
 	links = extractMdLinks(text, extension=extensions, referencestyle=True)
 
-	references = ""
-	ref_tpl = "[{thefile}]: {future_html}\n"
+	references = list()
+	ref_tpl = "[{thefile}]: {future_html}"
 	
 	#hold filename, title_old and title_new. For later text replacement
 	new_links = list()   
+
 
 	for link in links:
 		filename = link[0]
@@ -592,7 +593,82 @@ def parse_wikilinks(text, list_files):
 		future_title   = ""
 
 		# find output and title
-		for thisfile in list_files:
+		for key, thisfile in list(list_files.items()):
+			print ("++++++++++ " + filename)
+			if filename in thisfile['path_input']:
+				future_path = thisfile['path_output']
+				if title:
+					future_title = title
+					print("------------- " + future_title)
+					break
+				if thisfile['title']:
+					future_title = thisfile['title']
+					print("------------- " + future_title)
+					break 
+				# find title
+				#      can parse here (singlefileprop)
+				#      or use findhtmltitle()
+				#future_title = whateverresult
+				print("------------- no html")
+
+		# create ref
+		tmp = ref_tpl.format(thefile=filename, future_html=future_path)
+		if not tmp in references:
+			references.append(tmp)
+
+		new_links.append([filename, title, future_title])
+
+	# replace in text 
+	newtext = "<<<<SPLITMEOVERHERE>>>>".join(text)
+	search_tpl = "[{filename}][{title}]"
+	replace_tpl = "[{title}][{filename}]"
+
+	for link in new_links:
+		filename = link[0]
+		title_old = link[1]
+		title_new = link[2]
+		newtext = newtext.replace(
+			search_tpl.format(filename=filename, title=title_old), 
+			replace_tpl.format(filename=filename, title=title_new))
+
+	newtext = newtext.split("<<<<SPLITMEOVERHERE>>>>")
+
+	return newtext, references	
+
+def parse_wikilinks(text, list_files):
+	"""Parse wikilinks (reference links): [title][filename] or [filename][]
+	[filename] can have extension or not. 
+
+	:text   text as list 
+	:list_files  dictionary of files to search metadata in. (any key, just search in values)
+
+	return processed text (as list) and references (string)
+	"""
+
+	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
+	links = extractMdLinks(text, extension=extensions, referencestyle=True)
+
+	references = list()
+	ref_tpl = "[{thefile}]: {future_html}"
+	
+	#hold filename, title_old and title_new. For later text replacement
+	new_links = list()   
+
+	for link in links:
+		if not link[1]:
+			# [ref][]
+			filename = link[0]
+			title    = link[1]
+		else:
+			#[title][ref]
+			title = link[0]
+			filename    = link[1]
+
+		future_path   = ""
+		future_title   = ""
+
+		# find output and title
+		for key, thisfile in list(list_files.items()):
 			if filename in thisfile['path_input']:
 				future_path = thisfile['path_output']
 				if title:
@@ -604,16 +680,16 @@ def parse_wikilinks(text, list_files):
 				# find title
 				#      can parse here (singlefileprop)
 				#      or use findhtmltitle()
-				future_title = whateverresult
+				#future_title = whateverresult
 
 		# create ref
-		tmp = ref_tpl.format(thisfile=filename, future_html=future_path)
-		references += tmp 
+		tmp = ref_tpl.format(thefile=filename, future_html=future_path)
+		references.append(tmp)
 
 		new_links.append([filename, title, future_title])
 
+	return references	
 	# replace in text 
-	new_text = list()
 	newtext = "<<<<SPLITMEOVERHERE>>>>".join(text)
 	search_tpl = "[{filename}][{title}]"
 	replace_tpl = "[{title}][{filename}]"
@@ -683,7 +759,7 @@ def extractMdLinks(text, extension="md", referencestyle=False):
 	:referencestyle    for [][] links 
 	:return a nested list. 
 	             normal: holder(title, link)
-	             reference: holder(file, title)
+	             reference: holder(title, id_link)
 	"""
 
 	list_links = list()
@@ -1329,9 +1405,6 @@ class Pandy():
 	def _parseBook(self):
 		"""Make a book with navigation between files """
 
-		# to get properties for all files
-		self.db_files = dict()
-
 		# if we have a navigation file, have that as the file order
 		index_file = self.settings['FILE_INDEX']
 		if index_file and os.path.exists(index_file):
@@ -1347,6 +1420,8 @@ class Pandy():
 		else:
 			index_file = "noindex."
 
+
+		self._dbInit()
 		self.db_files['index'] = dict()
 		self.db_files['index'] = {
 			'title': "Index",
@@ -1356,7 +1431,6 @@ class Pandy():
 			'text' : '',		
 		}
 
-		self._listChapters()
 
 		tmp = list(self.files) 
 		tmp.append(index_file)
@@ -1369,7 +1443,7 @@ class Pandy():
 			if not 'index.' in picked.lower():
 				print (" Processing: " + path_getFilename(picked))
 
-			props = self._singleFileProperties(picked, self.command, specials=True)
+			props = self._fileMetadata(picked, self.command)
 			props['toc'] = ""
 
 			# should be in another way, but too lazy
@@ -1383,8 +1457,6 @@ class Pandy():
 				self.db_files['index'].update(props)
 			else:
 				self.db_files[picked] = props
-
-
 
 		# process index 
 		index_cmd = list(self.command)
@@ -1554,8 +1626,7 @@ class Pandy():
 		tmp_list = list()  # holds tuple: title, href
 
 		for the_savior in self.files:
-			newcommand = list(self.command)
-			file_current = self._singleFileProperties(the_savior, newcommand, True)
+			file_current = self._fileMetadata(the_savior)
 			relative = path_relative_to(file_current['path_output'], self.output, True)
 
 			tmp_list.append((file_current['title'], relative))
@@ -1563,6 +1634,94 @@ class Pandy():
 		self.listChapters = tmp_list
 
 
+	def _dbInit(self):
+		"""Init dbfiles with basic props """
+
+		self.db_files = dict()
+		tmp_listChap = list() # holds tuple: title, href
+
+		for the_savior in self.files:
+			props = self._fileMetadata(the_savior)
+			self.db_files[the_savior] = props 
+			self.db_files[the_savior]['processed'] = False 
+
+			relative = path_relative_to(props['path_output'], self.output, True)
+			tmp_listChap.append((props['title'], relative))
+
+		#list of titles in project with properties
+		self.listChapters = tmp_listChap
+
+
+
+
+
+	def _fileMetadataPaths(self, filepath):
+		"""for book. Get file properties: output path, input path. """
+
+		properties = {'path_output' : '', 'path_input' : '', 'title' : '', 'text': '' }
+
+		if filepath:
+			properties['path_input']  = filepath
+			properties['path_output'] = self._getOutputPath(filepath) + ".html"
+
+		properties['title'] = path_delExtension(path_getFilename(properties['path_output']))
+
+		return properties
+
+
+	def _fileMetadata(self, filepath, cmd=None):
+		"""for book. Get file properties: output path, input path, title and text. 
+			text: all processed (parse specials, wikilinks, converts to HTML)
+
+		cmd: the command as starting point 
+		"""
+
+		properties = self._fileMetadataPaths(filepath)
+
+		if not cmd:
+			return properties
+
+		# Magic begins! (Get title and (parsed) body)
+		cmd = list(cmd) 
+		cmd += ['-t', 'html']
+
+		# remove the --template, this way can extract title easily
+		for index, item in enumerate(cmd):
+			if item.startswith("--template"):
+				del cmd[index]
+				break 			
+		
+		# Special syntax 
+		with cmd_open_write(properties['path_input'], 'r') as tmp:
+			cmd_text = tmp.readlines()
+
+		cmd_text, toc = if_special_elements(cmd_text, self.settings['TOC_TAG'])
+		if toc:
+			cmd.append('--toc')
+
+
+		#remove root output path in outpath (mostly, wikilinks in index)
+		tmp = dict(self.db_files)
+		tmp_path = os.path.join(self.output, "")
+
+		for k, v in list(tmp.items()):
+			v['path_output'] = v['path_output'].replace(tmp_path, "")
+
+		cmd_text, references = parse_wikilinks_ownsyntax(cmd_text, tmp)
+
+		cmd_text = "".join(cmd_text)
+		references = "\n\n".join(references)
+		cmd_text += "\n\n[id_pandy]: index.html\n\n" + references
+
+		minimum = run_subprocess(cmd, True, cmd_text)
+		minimum = str(minimum, encoding='utf8')
+
+		# get the body (this is to also have the metadata; otherwise, 
+		# with --standalone it gets the body but not header-block)
+		properties['text'] = htmlSplitter(minimum, 'body')
+		properties['title'] = findTitleHtml(text_html=minimum, continueh1=True)
+		
+		return properties
 
 if __name__ == '__main__':
 
