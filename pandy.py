@@ -565,7 +565,7 @@ def parse_internalLinks(text):
 
 	return textNew.split("<<<<SPLITMEOVERHERE>>>>")
 	
-def parse_wikilinks_ownsyntax(text, list_files, output_key='path_output'):
+def parse_wikilinks(text, list_files, output_key='path_output'):
 	"""Parse wikilinks (reference links but inverted): [filename][title]
 	[filename] can have extension or not. [title] is optional. If blank: searches title 
 
@@ -626,7 +626,7 @@ def parse_wikilinks_ownsyntax(text, list_files, output_key='path_output'):
 
 	return newtext, references	
 
-def parse_wikilinks(text, list_files):
+def parse_wikilinks_mdreference(text, list_files):
 	"""Parse wikilinks (reference links): [title][filename] or [filename][]
 	[filename] can have extension or not. 
 
@@ -668,10 +668,6 @@ def parse_wikilinks(text, list_files):
 				if thisfile['title']:
 					future_title = thisfile['title']
 					break 
-				# find title
-				#      can parse here (singlefileprop)
-				#      or use findhtmltitle()
-				#future_title = whateverresult
 
 		# create ref
 		tmp = ref_tpl.format(thefile=filename, future_html=future_path)
@@ -1676,7 +1672,7 @@ class Pandy():
 		if toc:
 			cmd.append('--toc')
 
-		cmd_text, references = parse_wikilinks_ownsyntax(cmd_text, self.db_files, output_key='path_output_rootless')
+		cmd_text, references = parse_wikilinks(cmd_text, self.db_files, output_key='path_output_rootless')
 		cmd_text = "".join(cmd_text)
 		references = "\n\n".join(references)
 		cmd_text += "\n\n[id_pandy]: index.html\n\n" + references
@@ -1709,8 +1705,6 @@ if __name__ == '__main__':
 
 	print ("\n  ------------------ STARTING ------------------------------")
 	CONFIG = prepare_args(args)
-	print(CONFIG)
-
 
 	# steady, ready, go!
 	Pandy(CONFIG)
