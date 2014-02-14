@@ -4,7 +4,6 @@
 # -*- coding: utf-8 -*-
 # tested for pandoc 1.12.3
 
-
 # TOC wherever you want
 # prob split stuff instead of having one big file
 # Enable/disble extensions from cli
@@ -566,12 +565,13 @@ def parse_internalLinks(text):
 
 	return textNew.split("<<<<SPLITMEOVERHERE>>>>")
 	
-def parse_wikilinks_ownsyntax(text, list_files):
+def parse_wikilinks_ownsyntax(text, list_files, output_key='path_output'):
 	"""Parse wikilinks (reference links but inverted): [filename][title]
 	[filename] can have extension or not. [title] is optional. If blank: searches title 
 
 	:text   text as list 
 	:list_files  dictionary of files to search metadata in. (any key, just search in values)
+	:output_key   str dict key to look for ouput path value (for future path)
 
 	return processed text (as list) and references (string)
 	"""
@@ -585,7 +585,6 @@ def parse_wikilinks_ownsyntax(text, list_files):
 	#hold filename, title_old and title_new. For later text replacement
 	new_links = list()   
 
-
 	for link in links:
 		filename = link[0]
 		title    = link[1]
@@ -594,22 +593,14 @@ def parse_wikilinks_ownsyntax(text, list_files):
 
 		# find output and title
 		for key, thisfile in list(list_files.items()):
-			print ("++++++++++ " + filename)
 			if filename in thisfile['path_input']:
-				future_path = thisfile['path_output']
+				future_path = thisfile[output_key]
 				if title:
-					future_title = title
-					print("------------- " + future_title)
+					future_title = title.strip()
 					break
 				if thisfile['title']:
-					future_title = thisfile['title']
-					print("------------- " + future_title)
+					future_title = thisfile['title'].strip()
 					break 
-				# find title
-				#      can parse here (singlefileprop)
-				#      or use findhtmltitle()
-				#future_title = whateverresult
-				print("------------- no html")
 
 		# create ref
 		tmp = ref_tpl.format(thefile=filename, future_html=future_path)
@@ -765,7 +756,7 @@ def extractMdLinks(text, extension="md", referencestyle=False):
 	list_links = list()
 
 	expr_normal = "\[(.+?)?\]\((.+?\.(" + extension + "))\)"
-	expr_reference = "\[(.+?[\.(" + extension + ")]?)\]\[(.+?)?\]"
+	expr_reference = "\[(.+?[\.(" + extension + ")]?)\]\[(|.+?)\]"
 
 	if referencestyle:
 		expr = r'' + expr_reference
@@ -782,14 +773,37 @@ def extractMdLinks(text, extension="md", referencestyle=False):
 
 	return list_links
 
-def findTitleMd(filepath):
-	with cmd_open_write(filepath, 'r') as lalal:
-		this_title = ""
-		for line in lalal:
-			if line.startswith("% ") or line.startswith("title: ") or line.startswith("# "):
-				this_title = line  
-				return this_title
-		return filepath
+def findTitleMd(filepath=None, text_lines=None):
+	if filepath:
+		with cmd_open_write(filepath, 'r') as tmp:
+			the_text = tmp.readlines()
+	if text_lines:
+		the_text = text_lines
+
+	this_title = ""
+	max_meta = 30 #max lines to look for metadata title
+
+	for number, line in enumerate(the_text):
+		if line.startswith("% "):
+			return line[1:]
+		
+		if line.startswith("title: "):
+			tmp = line[7:]
+			if tmp.startswith(("'", '"')) and tmp.endswith(("'", '"')):
+				tmp = tmp[1:len(tmp) - 1]
+			return tmp
+
+		if number == max_meta:
+			break 
+
+	# nothing found. I'm doing extra work for you, ok? Next time use metadata
+	for number, line in enumerate(the_text):
+		if line.startswith("# "):
+			return line[1:]
+		if line.startswith("======="):
+			return the_text[number - 1]
+
+	return False
 
 
 # =============================
@@ -1420,62 +1434,18 @@ class Pandy():
 		else:
 			index_file = "noindex."
 
-
+		self.settings['FILE_INDEX'] = index_file
 		self._dbInit()
-		self.db_files['index'] = dict()
-		self.db_files['index'] = {
-			'title': "Index",
-			'toc': '', 
-			'path_output' : os.path.join(self.output, "index.html"),
-			'path_input' :index_file,
-			'text' : '',		
-		}
 
-
-		tmp = list(self.files) 
-		tmp.append(index_file)
-
-		# get files properties
-		for picked in tmp:
-			if not os.path.exists(picked):
-				continue
-
-			if not 'index.' in picked.lower():
-				print (" Processing: " + path_getFilename(picked))
-
-			props = self._fileMetadata(picked, self.command)
-			props['toc'] = ""
-
-			# should be in another way, but too lazy
-			text_for_toc = "dfgdfg <body>" + props['text'] + "</body> dfghdkfjdhjkf"
-			current_toc, props['text'] = getSplitTocBody(text_for_toc)
-
-			if current_toc:
-				props['toc'] = "<ul>" + current_toc + "</ul>"
-
-			if 'index.' in picked.lower():
-				self.db_files['index'].update(props)
-			else:
-				self.db_files[picked] = props
-
-		# process index 
-		index_cmd = list(self.command)
-		if "--toc" in index_cmd:
-			index_cmd.remove("--toc")
-
-		print (" Processing: index.md")
-
-		if not self.db_files['index']['text']:
-			tmp = [tmp.append(v) for k,v in list(self.db_files.items()) if not k == 'index']
-			self.db_files['index']['text'] = makeNavigationLinks(self.listChapters, files_tocs=tmp)
-
-		index_cmd += ['-o', self.db_files['index']['path_output'], '--metadata=title:' + self.db_files['index']['title']]
-		run_subprocess(index_cmd, True, self.db_files['index']['text'])		
 
 		# process files 
 		for i in range(0, len(self.files)):
+			if 'index.' in self.db_files[self.files[i]]['path_input']:
+				continue
 
 			current = self.db_files[self.files[i]]
+			print (" Processing: " + path_getFilename(current['path_input']))
+
 			prev = self.db_files[self.files[i - 1]]
 
 			if (i + 1) < len(self.files):
@@ -1483,9 +1453,13 @@ class Pandy():
 			else: 
 				nextt = dict() 
 				nextt['path_output'] = ""
-				nextt['title']       = ""
+				nextt['title']       = ""		
 
 			newcommand = list(self.command)
+
+			#finish processing text
+			current = self._fileParseBody(current, newcommand)
+
 			newcommand += ['-t', 'html', '-o', current['path_output']]
 
 			path_mkdir(path_get(current['path_output']))
@@ -1504,13 +1478,8 @@ class Pandy():
 				                          prev['path_output'], prev['title'], 
 				                          nextt['path_output'], nextt['title'])
 
-			this_toc = current['toc']
-			if not self.settings['NAV_SIDEBAR_TOC']:
-				this_toc = ''
-				current['text'] = "<div id='toc'>" + current['toc'] + "</div>" + current['text']
-
 			sidebar_navigation = makeNavigationLinks(self.listChapters, 
-				                  title_active=current['title'], toc_active=this_toc)
+				                  title_active=current['title'], toc_active=current['toc'])
 			
 			if self.settings['NAV_SIDEBAR']:
 				newcommand.append('--variable=side_navigation:' + sidebar_navigation)
@@ -1519,6 +1488,25 @@ class Pandy():
 				newcommand.append('--variable=book_navigation:' + book_navigation)
 
 			run_subprocess(newcommand, True, current['text'])
+
+		# process index 
+		index_cmd = list(self.command)
+		if "--toc" in index_cmd:
+			index_cmd.remove("--toc")
+
+		print (" Processing: index.md")
+
+		if os.path.exists(self.db_files['index']['path_input']):
+			self.db_files['index'] = self._fileParseBody(self.db_files['index'], index_cmd)
+
+		else:
+			tmp = [tmp.append(v) for k,v in list(self.db_files.items()) if not k == 'index']
+			self.db_files['index']['text'] = makeNavigationLinks(self.listChapters, files_tocs=tmp)
+
+		index_cmd += ['-o', self.db_files['index']['path_output'], '--metadata=title:' + self.db_files['index']['title']]
+		run_subprocess(index_cmd, True, self.db_files['index']['text'])		
+
+
 
 
 	def _getOutputPath(self, filepath):
@@ -1618,73 +1606,62 @@ class Pandy():
 
 		return '<div class="nav"><ul>' + navPre + navIndex + navNext + '</ul></div>'
 
-	def _listChapters(self):
-		""" list of titles in project with properties
-		:returns list 
-		"""
-
-		tmp_list = list()  # holds tuple: title, href
-
-		for the_savior in self.files:
-			file_current = self._fileMetadata(the_savior)
-			relative = path_relative_to(file_current['path_output'], self.output, True)
-
-			tmp_list.append((file_current['title'], relative))
-
-		self.listChapters = tmp_list
-
-
-	def _dbInit(self):
-		"""Init dbfiles with basic props """
+	def _dbInit(self, index_path=None):
+		"""Init dbfiles with props """
 
 		self.db_files = dict()
 		tmp_listChap = list() # holds tuple: title, href
+		tmp_path = os.path.join(self.output, "")
+
+		self.db_files['index'] = {
+			'title': "Index",
+			'path_output' : os.path.join(self.output, "index.html"),
+			'path_input' :self.settings['FILE_INDEX'],
+		     }
 
 		for the_savior in self.files:
+
 			props = self._fileMetadata(the_savior)
 			self.db_files[the_savior] = props 
-			self.db_files[the_savior]['processed'] = False 
-
+			
+			#remove root output path in outpath (mostly, wikilinks in index)
+			self.db_files[the_savior]['path_output_rootless'] = self.db_files[the_savior]['path_output'].replace(tmp_path, "")
+			
 			relative = path_relative_to(props['path_output'], self.output, True)
 			tmp_listChap.append((props['title'], relative))
+
 
 		#list of titles in project with properties
 		self.listChapters = tmp_listChap
 
+		if os.path.exists(self.settings['FILE_INDEX']):
+			props = self._fileMetadata(self.settings['FILE_INDEX'])
+			self.db_files['index']['title'] = props['title']
 
 
 
+	def _fileMetadata(self, filepath):
+		"""for book. Get file properties: output path, input path, md title """
 
-	def _fileMetadataPaths(self, filepath):
-		"""for book. Get file properties: output path, input path. """
+		properties = {'path_output' : '', 'path_input' : '', 'toc':'', 
+		             'title' : '', 'text': '', 'text_orig':'' }
 
-		properties = {'path_output' : '', 'path_input' : '', 'title' : '', 'text': '' }
-
-		if filepath:
-			properties['path_input']  = filepath
-			properties['path_output'] = self._getOutputPath(filepath) + ".html"
-
+		properties['path_input']  = filepath
+		properties['path_output'] = self._getOutputPath(filepath) + ".html"
 		properties['title'] = path_delExtension(path_getFilename(properties['path_output']))
+
+		tmp = findTitleMd(filepath)
+		if tmp:
+			properties['title'] = tmp
 
 		return properties
 
-
-	def _fileMetadata(self, filepath, cmd=None):
-		"""for book. Get file properties: output path, input path, title and text. 
-			text: all processed (parse specials, wikilinks, converts to HTML)
-
-		cmd: the command as starting point 
-		"""
-
-		properties = self._fileMetadataPaths(filepath)
-
-		if not cmd:
-			return properties
+	def _fileParseBody(self, fileprops, cmd):
 
 		# Magic begins! (Get title and (parsed) body)
 		cmd = list(cmd) 
 		cmd += ['-t', 'html']
-
+		
 		# remove the --template, this way can extract title easily
 		for index, item in enumerate(cmd):
 			if item.startswith("--template"):
@@ -1692,23 +1669,14 @@ class Pandy():
 				break 			
 		
 		# Special syntax 
-		with cmd_open_write(properties['path_input'], 'r') as tmp:
+		with cmd_open_write(fileprops['path_input'], 'r') as tmp:
 			cmd_text = tmp.readlines()
 
 		cmd_text, toc = if_special_elements(cmd_text, self.settings['TOC_TAG'])
 		if toc:
 			cmd.append('--toc')
 
-
-		#remove root output path in outpath (mostly, wikilinks in index)
-		tmp = dict(self.db_files)
-		tmp_path = os.path.join(self.output, "")
-
-		for k, v in list(tmp.items()):
-			v['path_output'] = v['path_output'].replace(tmp_path, "")
-
-		cmd_text, references = parse_wikilinks_ownsyntax(cmd_text, tmp)
-
+		cmd_text, references = parse_wikilinks_ownsyntax(cmd_text, self.db_files, output_key='path_output_rootless')
 		cmd_text = "".join(cmd_text)
 		references = "\n\n".join(references)
 		cmd_text += "\n\n[id_pandy]: index.html\n\n" + references
@@ -1718,10 +1686,22 @@ class Pandy():
 
 		# get the body (this is to also have the metadata; otherwise, 
 		# with --standalone it gets the body but not header-block)
-		properties['text'] = htmlSplitter(minimum, 'body')
-		properties['title'] = findTitleHtml(text_html=minimum, continueh1=True)
+		#fileprops['text'] = htmlSplitter(minimum, 'body')
+		#properties['title'] = findTitleHtml(text_html=minimum, continueh1=True)
 		
-		return properties
+		#extract toc
+		fileprops['toc'] = ""
+		this_toc, fileprops['text'] = getSplitTocBody(minimum)
+
+		if this_toc:
+			fileprops['toc'] = "<ul>" + this_toc + "</ul>"
+
+		return fileprops
+
+
+
+
+
 
 if __name__ == '__main__':
 
@@ -1729,6 +1709,8 @@ if __name__ == '__main__':
 
 	print ("\n  ------------------ STARTING ------------------------------")
 	CONFIG = prepare_args(args)
+	print(CONFIG)
+
 
 	# steady, ready, go!
 	Pandy(CONFIG)
