@@ -18,7 +18,6 @@
 # wikilinks: fix when in sub and using [:file] to refer to one in root
 
 
-
 import sys
 
 if sys.version_info[0] < 3:
@@ -1348,7 +1347,9 @@ class Pandy(object):
 			if self.settings['USE_NAV']:
 				newcommand.append('--variable=book_navigation:' + book_navigation)
 
+			current['text'] = current['text'].replace('<div class="references">', "")
 			run_subprocess(newcommand, True, current['text'])
+
 
 		# process index 
 		index_cmd = list(self.command)
@@ -1408,7 +1409,7 @@ class Pandy(object):
 			navLink = prop_next['title'] if use_titles else 'next'
 			navNext = link_tpl.format(ref=next_path, title=navLink + " &gt;")
 
-		return '<div class="nav"><ul>' + navPre + navIndex + navNext + '</ul></div>'
+		return '<ul class="booknav">' + navPre + navIndex + navNext + '</ul>'
 
 	def _dbInit(self, index_path=None):
 		"""Init dbfiles with props """
@@ -1490,6 +1491,8 @@ class Pandy(object):
 
 		if this_toc:
 			fileprops['toc'] = "<ul>" + this_toc + "</ul>"
+
+
 
 		return fileprops
 
