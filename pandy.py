@@ -16,7 +16,8 @@
 # custom css/js: --include-in-header
 #
 # wikilinks: fix when in sub and using [:file] to refer to one in root
-# add self.references_all to files!!!!
+
+
 
 import sys
 
@@ -322,17 +323,24 @@ def run_subprocess(command, output=False, text=None):
 	normally -> check_call
 	if output activated: returns the output to string -> check_output
 	if also text: to interact -> Popen (encodes to utf-8)
+
+	Added shell=True because Windows/Python is crazy sometimes and cant find .exe in path. 
+	Thank you <http://stackoverflow.com/questions/3022013>
 	"""
 
 	if not output:
-		return subprocess.check_call(command, stderr=subprocess.STDOUT)
+		return subprocess.check_call(command, stderr=subprocess.STDOUT, shell=True)
 	elif not text:
-		return subprocess.check_output(command)
+		return subprocess.check_output(command, shell=True)
 	else:
 		text = text.encode('utf-8')
-		tmp  = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-		result = tmp.communicate(text)[0] # send stdin 
-		return result
+		tmp  = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True)
+		try:
+			result = tmp.communicate(text)[0] # send stdin 
+		except BrokenPipeError:
+			pass #Probably template doesn't exist
+		else:
+			return result
 
 def translate_synonyms(word):
 	"""Translate the synonyms to complete words"""
@@ -563,17 +571,25 @@ def parse_internalLinks(text):
 
 	return textNew.split("<<<<SPLITMEOVERHERE>>>>")
 
-def parse_wikilinks(text, list_files):
+def parse_wikilinks(text, list_files=None, this_references=None):
 	"""Parse wikilinks (reference links but inverted): [:filename][title]
 	[:filename] can have extension or not.
 	[title] is optional. If blank: searches title
 
-	:text   text as list
-	:list_files  dict of files: any key and holding (minimum):
-	                     path_input, title, output ("future path")
+	:text             text as list
+	:list_files       dict. files: any key and holding (minimum):
+	                      path_input, title, output ("future path")
+	:this_references  dict. use this as reference list (do not search in files)
+	                    key: ref id. ex. filenames, can be joined (search w/ "in")
+	                    value['output']: output path ("future path"/html)
+	                    value['title']: file future title 
 
 	return processed text (list) and references (list) of the file
 	"""
+
+	# prefere this_references 
+	if list_files is not None and this_references is not None:
+		list_files = None 
 
 	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
 	links = extractMdLinks(text, extension=extensions, referencestyle=True)
@@ -588,19 +604,25 @@ def parse_wikilinks(text, list_files):
 		filename = link[0]
 		title    = link[1]
 		future_path  = ""
-		future_title = ""
+		future_title = title
 
-		# find output and title
-		for key, thisfile in list(list_files.items()):
-			if filename in thisfile['path_input']:
-				future_path = thisfile['output']
-				if title:
-					future_title = title
-					break
-				if thisfile['title']:
-					future_title = thisfile['title']
-					break 
-		
+		if list_files is not None:
+			# find output and title
+			for key, thisfile in list(list_files.items()):
+				if filename in thisfile['path_input']:
+					future_path = thisfile['output']
+					
+					if not title and thisfile['title']:
+						future_title = thisfile['title']
+						break 
+		else:
+			for key, props in list(this_references.items()):
+				if filename in key:
+					future_path  = this_references[key]['output']
+
+					if not title and this_references[key]['title']:
+						future_title = this_references[key]['title']
+
 		# create ref
 		tmp = ref_tpl.format(thefile=filename, future_html=future_path)
 		if not tmp in references:
@@ -934,7 +956,8 @@ def getSplitTocBody(html, html_ver):
 	"""
 
 	if not drinkSoup:
-		text = html.split("<body>")[1].split("</body>")[0]
+		text = html.split("<body>")[1]
+		text = text.split("</body>")[0]
 		
 		toc_tag = "nav"
 		if not html_ver == "html5":
@@ -1377,8 +1400,8 @@ class Pandy(object):
 	def _bookNavigation(self, prop_current, prop_prev, prop_next):
 		""" Makes the navigation links """
 
-		navPre  = ""
-		navNext = ""
+		navPre   = ""
+		navNext  = ""
 		navIndex = ""
 
 		use_titles = self.settings['NAV_TITLE']
@@ -1409,23 +1432,32 @@ class Pandy(object):
 			'path_input' :self.settings['FILE_INDEX'],
 		     }
 
+		ref_tpl = "[{thefile}]: {future_html}"
+
+
 		for the_savior in self.files:
 
 			props = self._fileMetadata(the_savior)
 			self.db_files[the_savior] = props 
 
-			# create references, with and without extension
-			self.references_list[the_savior] = self.db_files[the_savior]['output']
-			self.references_list[path_delExtension(the_savior)] =  self.db_files[the_savior]['output']
+			# create references, with and without extension and prepare string 
+			tmp_output       = self.db_files[the_savior]['output']
+			tmp_file         = path_getFilename(the_savior)
+			tmp_file_extless = path_delExtension(tmp_file)
+			key_name         = tmp_file_extless + "|" + tmp_file
+			tmp = ""
+
+			self.references_list[key_name] = dict()
+			self.references_list[key_name]['output'] = tmp_output
+			self.references_list[key_name]['title']  = self.db_files[the_savior]['title']
+
+			tmp = "\n\n" + ref_tpl.format(thefile=tmp_file, future_html=tmp_output)
+			tmp += "\n\n" + ref_tpl.format(thefile=tmp_file_extless, future_html=tmp_output)
+			self.references_all += tmp
 			
 		if os.path.exists(self.settings['FILE_INDEX']):
 			props = self._fileMetadata(self.settings['FILE_INDEX'])
 			self.db_files['index']['title'] = props['title']
-
-		ref_tpl = "[{thefile}]: {future_html}\n\n"
-		for title, path in list(self.references_list.items()):
-			tmp = ref_tpl.format(thefile=title, future_html=path)
-			self.references_all += tmp 
 
 	def _fileMetadata(self, filepath):
 		"""for book. Get file properties: output path, input path, md title """
@@ -1465,11 +1497,11 @@ class Pandy(object):
 		cmd.append('--toc')
 		cmd_text, toc = if_special_elements(cmd_text, self.settings['TOC_TAG'])
 
-		cmd_text, references = parse_wikilinks(cmd_text, self.db_files)
+		cmd_text, references = parse_wikilinks(cmd_text, this_references=self.references_list)
 		cmd_text = "".join(cmd_text)
-
-		references = "\n\n".join(references)
-		cmd_text += "\n\n" + references
+		#references = "\n\n".join(references)
+		#cmd_text += "\n\n" + references
+		cmd_text += "\n\n" + self.references_all
 
 		minimum = run_subprocess(cmd, True, cmd_text)
 		minimum = str(minimum, encoding='utf8')
