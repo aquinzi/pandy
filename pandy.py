@@ -16,7 +16,7 @@
 # custom css/js: --include-in-header
 #
 # wikilinks: fix when in sub and using [:file] to refer to one in root
-
+# add self.references_all to files!!!!
 
 import sys
 
@@ -29,6 +29,15 @@ import subprocess
 import os
 import codecs
 import re
+
+drinkSoup = False
+try:
+	from bs4 import BeautifulSoup
+	drinkSoup = True 
+except ImportError:
+	pass
+	# Dale, hacemela mas dificil
+
 
 # ==============================
 # ==== info & pandoc config ====
@@ -391,20 +400,6 @@ def check_synonyms(format_from, format_to):
 # == methods: special parsing ====
 # ================================
 
-def if_special_elements_open(file_path, toc_tag):
-	"""open file (file_path) and process trough specials 
-	(admonitions, abbreviations, TOC tag, internallinks)
-	returns: text (regardless if changed or not ) and hasTOC (bool)
-	"""
-	
-	with cmd_open_write(file_path, 'r') as input_file:
-		text_list = input_file.readlines()
-
-	text, hasTOC = if_special_elements(text_list, toc_tag)
-	new_text = "".join(text)
-
-	return new_text, hasTOC
-
 def if_special_elements(text, toc_tag):
 	"""read text (as list) and process trough specials 
 	(admonitions, abbreviations, TOC tag, internallinks)
@@ -568,7 +563,6 @@ def parse_internalLinks(text):
 
 	return textNew.split("<<<<SPLITMEOVERHERE>>>>")
 
-
 def parse_wikilinks(text, list_files):
 	"""Parse wikilinks (reference links but inverted): [:filename][title]
 	[:filename] can have extension or not.
@@ -617,8 +611,8 @@ def parse_wikilinks(text, list_files):
 			new_links.append([filename, title, future_title])
 
 	# replace in text 
-	newtext = "<<<<SPLITMEOVERHERE>>>>".join(text)
-	search_tpl = "[:{filename}][{title}]"
+	newtext     = "<<<<SPLITMEOVERHERE>>>>".join(text)
+	search_tpl  = "[:{filename}][{title}]"
 	replace_tpl = "[{title}][{filename}]"
 
 	for link in new_links:
@@ -632,8 +626,6 @@ def parse_wikilinks(text, list_files):
 	newtext = newtext.split("<<<<SPLITMEOVERHERE>>>>")
 
 	return newtext, references	
-
-
 
 def extractMdLinks(text, extension="md", referencestyle=False):
 	"""Extract markdown links in text with extension. 
@@ -925,29 +917,9 @@ def prepare_args(arg_dict):
 
 	return settings_final
 
-# =================================
-# == Html stuff: shouldn't be... ==
-# =================================
-
-def htmlSplitter(text, tag, special_start=None, find=False):
-	"""Split html, getting only what is in tag 
-	
-	:special_start if beginning has id or class 
-	:find  if not found, return None 
-	"""
-	
-	tpl_start = "<" + tag + ">"
-	if special_start:
-		tpl_start = special_start
-
-	tpl_end = "</" + tag + ">"
-
-	splitting = text.split(tpl_start)
-	if find:
-		if len(splitting) <= 1:
-			return None 
-
-	return splitting[1].split(tpl_end)[0]
+# ==================
+# === Html stuff ===
+# ==================
 
 def getSplitTocBody(html, html_ver):
 	"""Returns the TOC list and the rest of the html body.
@@ -961,26 +933,49 @@ def getSplitTocBody(html, html_ver):
 	            html -> div 
 	"""
 
-	text = htmlSplitter(html, 'body')
-	
-	toc_tag = "nav"
-	if not html_ver == "html5":
-		toc_tag = "div"
+	if not drinkSoup:
+		text = html.split("<body>")[1].split("</body>")[0]
+		
+		toc_tag = "nav"
+		if not html_ver == "html5":
+			toc_tag = "div"
 
-	if not 'id="TOC">' in text:
-		print("no toc ")
-		return '', text.split('</' + toc_tag + '>')[1]
+		if not 'id="TOC">' in text:
+			print("no toc ")
+			return '', text.split('</' + toc_tag + '>')[1]
 
-	text = text.split('<div id="TOC">')[1]
-	text_parts = text.split('</div>')
-	body = text_parts[1]
-	toc = text_parts[0]
-	toc = toc.splitlines()
-	toc = [line for line in toc if line]
-	toc = toc[1:-1] # remove first <ul> and last </ul>
-	toc = "".join(toc)
+		text = text.split('<div id="TOC">')[1]
+		text_parts = text.split('</div>')
+		body = text_parts[1]
+		toc = text_parts[0]
+		toc = toc.splitlines()
+		toc = [line for line in toc if line]
+		#toc = toc[1:-1] # remove first <ul> and last </ul>
+		toc = "".join(toc)
+		return toc, body
 
-	return toc, body
+	else:
+		soup = BeautifulSoup(html)
+
+		toc = soup.find(id=['TOC'])
+		if toc:
+			toc = toc.extract()
+			toc = str(toc)
+		else:
+			toc = ''
+
+		header = soup.find('header')
+		if not header:
+			header = soup.find(id=re.compile('header$'))
+		header.extract()
+
+		tmp = str(soup.renderContents(), encoding="utf-8")
+
+		tmp = tmp.split("<body>")[1]
+		body = tmp.split("</body>")[0]
+
+		return toc, body 
+
 
 # ============
 # == Misc ====
@@ -1271,12 +1266,6 @@ class Pandy(object):
 			all_texts = "".join(all_texts)
 			run_subprocess(cmd_special, True, all_texts)		
 
-
-
-
-
-
-
 	def _parseBook(self):
 		"""Make a book with navigation between files """
 
@@ -1487,15 +1476,9 @@ class Pandy(object):
 	
 		#extract toc
 		fileprops['toc'] = ""
-		this_toc, fileprops['text'] = getSplitTocBody(minimum, html_ver=self.settings['HTML_VER']) 
-
-		if this_toc:
-			fileprops['toc'] = "<ul>" + this_toc + "</ul>"
-
-
+		fileprops['toc'], fileprops['text'] = getSplitTocBody(minimum, html_ver=self.settings['HTML_VER']) 
 
 		return fileprops
-
 
 	def makeNavigationLinks(self, href_active=None, isIndex=False):
 		"""make the whole book navigation: 
@@ -1534,10 +1517,6 @@ class Pandy(object):
 			final += li
 
 		return "<ul>\n" + final + "</ul>"
-
-
-
-
 
 if __name__ == '__main__':
 
