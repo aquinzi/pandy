@@ -14,7 +14,9 @@ class TestMe(object):
 
 		self.init_func(self.test_parsingAbbr)
 		self.init_func(self.test_parsingAdmonition)
-		self.init_func(self.test_findh1)
+		self.init_func(self.test_internallinks)
+		self.init_func(self.test_wikilinks)
+		self.init_func(self.test_findTitleMd)
 		
 		self.finishing()
 
@@ -36,7 +38,7 @@ class TestMe(object):
 		str_result = "".join(str_result)
 
 		self.tests_total += 1
-		drumroll = (str_result == str_shouldbe)
+		drumroll = compare('string', str_result, str_shouldbe)
 		self.print_result("Parsing abbreviations", drumroll)
 
 		if not drumroll:
@@ -77,107 +79,174 @@ class TestMe(object):
 		str_from = str_from.split('\n')
 		str_result = pandy.parse_admonitions(str_from)
 
-		# so could collapse above
-		"""
-		for index in range(len(str_result)):
-			if '"admonition-title">' in str_result[index]:
-				str_result[index] = str_result[index].replace('\t<p class="admonition-title">', '<p class="admonition-title">')	
-		"""	
-
 		str_result_bak = list(str_result)
 		str_result = "\n".join(str_result)
 
 		self.tests_total += 1
-		drumroll = (str_result == str_shouldbe)
+		drumroll = compare('string', str_result, str_shouldbe)
 		self.print_result("Parsing admonitions", drumroll)
 
 		if not drumroll:
 			str_shouldbe = str_shouldbe.split('\n')
-			diff = difflib.ndiff(str_shouldbe, str_result_bak )
+			diff = difflib.ndiff(str_shouldbe, str_result_bak)
 
 			for d in diff:
 				print (d)
 
-	def test_findh1(self):
-		str_from_notoc = """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-			<html xmlns="http://www.w3.org/1999/xhtml">
-			<head>
-			  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-			  <meta http-equiv="Content-Style-Type" content="text/css" />
-			  <meta name="generator" content="pandoc" />
-			  <title></title>
-			  <style type="text/css">
-			    html, body {
-			        color: black;
-			    }
-			  </style>
-			</head>
-			<body class="normal">
-			<div id="wrapper">
-			<h1 id="adverbios">Adverbios</h1>
-			<p>Los adverbios suelen estar delante del verbo o adjetivo que modifican. Segun el tipo de adjetivo las reglas de formacion de adverbios cambian:</p>
+	def test_internallinks(self):
+		""" Internal links (old wikilinks)"""
 
-			<p>Otras formas para formar adverbios:</p>
+		md_from = list()
+		md_from.append('  * [:nocionesbasicas][]')
+		md_from.append('  * [Greetings](greetings.md)')
+		md_from.append('  * [El verbo ser](desu.md)')
+		md_from.append('  * [Tiempo](tiempo.md)')
+		md_from.append('  * [](yup.md)')
+		
+		md_to = list()
+		md_to.append('  * [:nocionesbasicas][]')
+		md_to.append('  * [Greetings](greetings.html)')
+		md_to.append('  * [El verbo ser](desu.html)')
+		md_to.append('  * [Tiempo](tiempo.html)')
+		md_to.append('  * [](yup.html)')
 
-			<h2 id="adverbios-intraducibles">Adverbios intraducibles</h2>
-			<p>Algunas veces, se pueden encontrar adverbios con matices especiales o con adverbios que no tienen una traduccion clara. Los mas representativos:</p>
-
-			</div>
-			</body></html>"""
-
-		str_from_toc = """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-			<html xmlns="http://www.w3.org/1999/xhtml">
-			<head>
-			  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-			  <meta http-equiv="Content-Style-Type" content="text/css" />
-			  <meta name="generator" content="pandoc" />
-			  <title></title>
-			  <style type="text/css">
-			    html, body {
-			        color: black;
-			    }
-			  </style>
-			</head>
-			<body class="normal">
-			<div id="wrapper">
-			<div id="TOC">
-			<ul>
-			<li><a href="#adverbios">Adverbios</a><ul>
-			<li><a href="#adverbios-intraducibles">Adverbios intraducibles</a></li>
-			</ul></li>
-			</ul>
-			</div>
-			<h1 id="adverbios"><a href="#adverbios">Adverbios</a></h1>
-			<p>Los adverbios suelen estar delante del verbo o adjetivo que modifican. Segun el tipo de adjetivo las reglas de formacion de adverbios cambian:</p>
-
-			<p>Otras formas para formar adverbios:</p>
-
-			<h2 id="adverbios-intraducibles"><a href="#adverbios-intraducibles">Adverbios intraducibles</a></h2>
-			<p>Algunas veces, se pueden encontrar adverbios con matices especiales o con adverbios que no tienen una traduccion clara. Los mas representativos:</p>
-
-			</div>
-			</body></html>"""
-
-		str_shouldbe = "Adverbios"
-
-		toc_no = pandy.findH1(str_from_notoc)
-		toc_yes = pandy.findH1(str_from_toc)
+		result = pandy.parse_internalLinks(md_from)
 
 		self.tests_total += 1
-		drumroll = (toc_no == str_shouldbe)
-		self.print_result("Finding H1, no TOC", drumroll)
+		drumroll = compare('list', result, md_to)
+		self.print_result("Parsing internal links", drumroll)
 
 		if not drumroll:
-			print (" It should be: " + str_shouldbe)
-			print ("But got " + toc_no)
+			diff = difflib.ndiff(md_to, result)
+
+			for d in diff:
+				print (d)
+
+	def test_wikilinks(self):
+		"""Parsing wikilinks """
+
+		md_from = ['Un poco de [:nocionesbasicas.md][], despues [:greetings][saludamos]. Un [:invalid][] y otro [:invalid.md][invalid link]']
+		md_to = ['Un poco de [Nociones Basicas][nocionesbasicas.md], despues [saludamos][greetings]. Un [:invalid][] y otro [:invalid.md][invalid link]']
+
+		md_to_references_list = [
+  		    '[nocionesbasicas.md]: nocionesbasicas.html',
+  		    '[greetings]: greetings.html',
+  		    ]
+
+		tmp_refs = {
+			'nocionesbasicas|nocionesbasicas.md': {
+				'output' : 'nocionesbasicas.html', 'title': 'Nociones Basicas'
+			},
+			'greetings': {
+				'output' : 'greetings.html', 'title': 'Greetings'
+			}
+		}
+
+		result_text, result_refs = pandy.parse_wikilinks(md_from, this_references=tmp_refs)
+		self.tests_total += 1
+
+		drumroll = compare('list', result_text, md_to)
+		self.print_result("Parsing wikilinks", drumroll)
+		if not drumroll:
+			diff = difflib.ndiff(md_to, result_text)
+
+			for d in diff:
+				print (d)
 
 		self.tests_total += 1
-		drumroll = (toc_yes == str_shouldbe)
-		self.print_result("Finding H1, with TOC", drumroll)
-
+		drumroll = compare('list', result_refs, md_to_references_list)
+		self.print_result("Comparing references", drumroll)
 		if not drumroll:
-			print (" It should be: " + str_shouldbe)
-			print ("But got " + toc_yes)		
+			diff = difflib.ndiff(md_to_references_list, result_refs)
+
+			for d in diff:
+				print (d)	
+
+	def test_findTitleMd(self):
+		"""Find title in md"""
+
+		shouldbe = "Tiempo"
+
+
+		# pandoc block
+		md_from = [
+		'% Tiempo',
+		'% author ',
+		'',
+		'Hora',
+		'------',
+		'',
+		'La hora se construye con [contadores](contadores.md): ji para las horas y bun para los minutos. Se usa la [particula ni](particulas_ni.md) para hacer tiempo (como "at" en ingles).']
+
+		result = pandy.findTitleMd(text_lines=md_from)
+		self.tests_total += 1
+
+		drumroll = compare('string', result, shouldbe)
+		self.print_result("Finding title, pandoc block", drumroll)
+		if not drumroll:
+			print ("It should be: " + shouldbe)
+			print ("But got: " + result)
+
+		# YAML block 
+		md_from = [
+		'---',
+		'title: Tiempo',
+		'--- ',
+		'',
+		'Hora',
+		'------',
+		'',
+		'La hora se construye con [contadores](contadores.md): ji para las horas y bun para los minutos. Se usa la [particula ni](particulas_ni.md) para hacer tiempo (como "at" en ingles).']
+
+		result = pandy.findTitleMd(text_lines=md_from)
+		self.tests_total += 1
+
+		drumroll = compare('string', result, shouldbe)
+		self.print_result("Finding title, YAML block", drumroll)
+		if not drumroll:
+			print (" It should be: " + shouldbe)
+			print ("But got " + result)
+
+
+		# markdown ATX headers 
+		md_from = [
+		'',
+		'# Tiempo',
+		'some text',
+		'## Hora',
+		'',
+		'La hora se construye con [contadores](contadores.md): ji para las horas y bun para los minutos. Se usa la [particula ni](particulas_ni.md) para hacer tiempo (como "at" en ingles).']
+
+		result = pandy.findTitleMd(text_lines=md_from)
+		self.tests_total += 1
+
+		drumroll = compare('string', result, shouldbe)
+		self.print_result("Finding title, Atx headers", drumroll)
+		if not drumroll:
+			print (" It should be: " + shouldbe)
+			print ("But got " + result)
+
+		# markdown Setext headers
+		md_from = [
+		'',
+		'Tiempo',
+		'========= ',
+		'sometext',
+		'Hora',
+		'------',
+		'',
+		'La hora se construye con [contadores](contadores.md): ji para las horas y bun para los minutos. Se usa la [particula ni](particulas_ni.md) para hacer tiempo (como "at" en ingles).']
+
+		result = pandy.findTitleMd(text_lines=md_from)
+		self.tests_total += 1
+
+		drumroll = compare('string', result, shouldbe)
+		self.print_result("Finding title, Setext headers", drumroll)
+		if not drumroll:
+			print (" It should be: " + shouldbe)
+			print ("But got " + result)
+
+
 
 	def finishing(self):
 		print ("\n\n------------------------------- ")
@@ -186,11 +255,9 @@ class TestMe(object):
 		exit()
 
 	def print_function_name(self, func):
-
 		print ("\n" + func.__name__ )
 
 	def print_result(self, msg, result):
-
 		if result:
 			result = " ok "
 		else:
@@ -202,6 +269,26 @@ class TestMe(object):
 	def init_func(self, func):
 		self.print_function_name(func)
 		func()
+
+def compare(what, compare1, compare2):
+	""" what: 'string' or 'list'
+	returns boolean
+	"""
+
+	if what in ("string", "str"):
+		return (compare1 == compare2)
+
+	if what == "list":
+		if not len(compare1) == len(compare2):
+			return False 
+
+		total_items = len(compare1)
+		for i in range(total_items):
+			if not compare1[i] == compare2[i]:
+				return False 
+		return True 
+
+
 
 if __name__ == '__main__':
 	TestMe()

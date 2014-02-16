@@ -851,8 +851,6 @@ def parse_wikilinks(text, list_files=None, this_references=None):
 
 				break 				
 
-
-
 	# replace in text 
 	newtext     = "<<<<SPLITMEOVERHERE>>>>".join(text)
 	search_tpl  = "[:{filename}][{title}]"
@@ -902,7 +900,7 @@ def extractMdLinks(text, extension="md", referencestyle=False):
 	return list_links
 
 def findTitleMd(filepath=None, text_lines=None):
-	"""Find title in markdown file. All possibilities (% , title: # and =====)
+	"""Find title in markdown file. All posibilities (% , title: # and =====)
 	:filepath   path to open file 
 	:text_lines   text in list
 	"""
@@ -931,7 +929,7 @@ def findTitleMd(filepath=None, text_lines=None):
 	# nothing found. I'm doing extra work for you, ok? Next time use metadata
 	for number, line in enumerate(the_text):
 		if line.startswith("# "):
-			return line[1:]
+			return line[2:]
 		if line.startswith("======="):
 			return the_text[number - 1].strip()
 
@@ -1550,7 +1548,6 @@ class Pandy(object):
 
 		self.finallySave(index_cmd, self.db_files['index'], projindex=self.db_files['index']['title'])
 
-
 	def finallySave(self, command, current_file, **kwargs):
 		""" (book) Save according to template option 
 
@@ -1742,7 +1739,6 @@ class Pandy(object):
 def builtintpl(html, book_nav='', sidebar='', projindex='', pagetitle=''):
 	"""Custom/embebed template; using pandoc's default"""
 
-
 	#plain splitting
 
 	head_split = html.split("</head>")
@@ -1766,10 +1762,6 @@ def builtintpl(html, book_nav='', sidebar='', projindex='', pagetitle=''):
 	body_final = body + code_after + '</body>' + body_split[1]
 
 	return head_final + body_final
-
-
-
-
 
 
 if __name__ == '__main__':
