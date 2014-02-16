@@ -1,5 +1,5 @@
 #! python3
-# "Wrapper" for Pandoc (python 3): pandy [file/folder] [from] [to] [other options]
+# "Wrapper" for Pandoc (python 3): pandy [file/folder] [options]
 # pylint: disable=W0312, C0103, C0326, C0303
 #                 tab instead spaces, invalid names, space operators, trailing whitespace
 #
@@ -9,14 +9,13 @@
 # remember: when parsing indiv. -o is the folder to save to
 
 
-
 # TOC wherever you want
 # prob split stuff instead of having one big file
 # Enable/disble extensions from cli
 # custom css/js: --include-in-header
 #
 # wikilinks: fix when in sub and using [:file] to refer to one in root
-# if beautifulsoup, can use book with any format and not ony markdown
+
 
 import sys
 
@@ -117,6 +116,7 @@ _DEFAULT_CONFIG = {
 	'HIGHLIGHT': 'pygments',
 	'HIGHLIGHT_NO': False,
 	'SLIDES': 'dzslides', 
+	'TEMPLATE_PANDY': False,
 	
 	'SOURCE': os.getcwd(),
 	'OUTPUT_PATH': '',
@@ -150,6 +150,231 @@ _DEFAULT_CONFIG = {
 
 # for wiki links mostly
 ACCEPTED_MD_EXTENSIONS = ('md', 'txt', 'mdown', 'markdown')
+
+
+HTML_CSS = """
+    *           { margin: 0; padding: 0; }
+    html, body  { color: black; }
+
+    body {
+        padding: 0px 25px; 
+        margin: -1px auto;
+        font: 14px helvetica, "Segoe UI", arial, freesans, sans-serif; 
+        line-height: 1.6em;
+        color: #3A3A3A;
+        background-color: #f2f2f2;
+    }
+
+    p { margin: 1em 0; }
+
+    a {text-decoration: none; border-bottom: 1px dotted; color: #4183c4; }
+    a:hover, a:active { color: #75A837; }
+
+    blockquote {
+        margin: 14px 0; padding: 0.7em 11px;
+        color: #555;
+        font-style: italic;
+        border-left: 10px solid #838383;
+    }
+
+    img {
+        display:          block;
+        background-color: #F3F3F2;
+        border:           1px solid #D9D9D7;
+        margin:           0px auto;   padding: 5px;
+    }
+
+    ins { color:#008000; }
+    del { color:#ACACAC; }
+
+    hr { border: 0; height: 1px; background: #333; }
+
+    sup, sub, a.footnote-ref {
+        height:         0;
+        line-height:    1;
+        vertical-align: super;
+        position:       relative;
+    }
+
+    sub             {vertical-align: sub; top: -1px; }
+    a.footnote-ref { font-size: 1em; }
+
+    abbr { border-bottom: 1px dotted }
+
+    h1,h2,h3,h4,h5,h6 { margin: 1.5em 0px 1em; padding: 4px 0; border-bottom: 1px solid #e0e0e0; }
+    h1 { font-size: 2em;}
+    h2 { font-size: 1.571em; }
+    h3 { font-size: 1.429em; }
+    h4 { font-size: 1.286em; }
+    h5 { font-size: 1.143em; color: #4d4d4d;}
+    h6 { font-size: 1em; color: #666; }
+    h1.title { margin:0 }
+
+    ul, ol  { margin: 21px 0 0px 30px; list-style-position: outside; }
+    li      { margin: 7px 0 }
+    ul      { list-style-type: disc; }
+    ol      { list-style-type: decimal-leading-zero; }
+
+    dl, dt, dd { margin: 0; }
+    dl { padding: 0px 1em 10px; }
+    dt { padding: 5px 0 5px; font-weight: bold; line-height: normal; }
+    dd { padding: 0 10px 20px 3em; font-style: italic; }
+
+    /* based on http://icant.co.uk/csstablegallery/tables/50.php (Blaugrana). */
+    table { 
+        padding: 0; margin: 0 auto 2em auto;
+        border-spacing: 0; border-collapse: collapse;
+        width: 70%;
+        border: 1px solid;
+    }
+    th, caption {color: #444; font-weight: bold;text-align: center;}
+    td, th {padding: .6em .4em; vertical-align: top; border: 1px solid #779; }
+    th, tfoot td {border: 1px solid #361; background: #e0e5cf; }
+    tr { background:#f5f5f5 }
+    tr:hover, tr.odd:hover { background: #cfe0e5 }
+    tr.odd { background: #e5cfe0 }
+    tr.odd td, tr.odd th { border-color: #977; }
+
+    pre, code {
+        border:         1px solid #ccc;
+        font-size:      12px;
+        font-family:    Consolas, "Liberation Mono", Courier, monospace;
+        background-color:#eee;
+    }
+
+    pre  { margin: 5px 0 0; padding: 6px 5px; white-space: pre; overflow: auto; }
+    code { margin: 0 2px; padding: 2px 5px; white-space: nowrap; }
+
+    #TOC    { margin-top: 30px; background-color: #e5efdf; border: 1px solid #cedec4;}
+    #TOC a  { margin: 0 15px !important; }
+    #TOC ul {
+        margin: 1px 0 0 15px !important;    
+        padding: 0 0 0 1px !important;
+        display: block;
+        line-height: 20px;
+        list-style: none;
+    }
+    #TOC ul li  { border-left: 1px solid; position: relative; margin:0 !important; }
+    #TOC ul > #TOC li { padding-bottom: 10px !important;}
+    #TOC ul li:before {
+        content: '';
+        width: 14px;
+        position: absolute;
+        border-bottom: 1px solid;
+        left: 0px;
+        top: 10px;
+    }
+    #TOC ul li:last-child {border-left:none;}
+    #TOC ul li:last-child:before {border-left:1px solid; height: 10px; margin-top:-10px !important; }
+    #TOC ul li, #TOC ul li:before, #TOC ul li:last-child:before {border-color: #7A7A7A; }
+    .admonition p   { margin: 0.5em 1em 0.5em 1em; padding: 0;}
+    .admonition pre { margin: 0.4em 1em 0.4em 1em;}
+    .admonition ul, .admonition ol { margin: 0.1em 0.5em 0.5em 3em;   padding: 0;}
+
+    .admonition {
+        margin: 2em; padding: 0;
+        font-size:        0.9em;
+        border:           1px solid #c2c2c2;
+        background-color: #e9e9e9;
+    }
+
+    .admonition p.admonition-title {
+        margin:     0;
+        padding:    0.1em 0 0.1em 0.5em;
+        font-size:  1.1em;
+        font-weight: bold;
+        color:      #fff;
+        border-bottom: 1px solid #c2c2c2;
+        background-color: #999; 
+    }
+
+    .admonition.error, .admonition.caution, .admonition.danger
+    {border-color: #900000; background-color: #ffe9e9;}
+
+    .error p.admonition-title, .caution p.admonition-title, .danger p.admonition-title
+    {background-color: #b04040; border-color: #900000;}
+
+    .admonition.hint, .admonition.download 
+    {background-color: #ECFAE3;  border-color: #609060;}
+
+    .hint p.admonition-title, .download p.admonition-title 
+    {background-color: #70A070; border-color: #609060;}
+
+    .admonition.note, .admonition.tip, .admonition.warning
+    {border-color:#e2ba54; background-color:#fcfce1;}
+
+    .note p.admonition-title, .tip p.admonition-title, .warning p.admonition-title
+    {background-color: #f1d170; border-color:#e2ba54;}
+
+    .admonition.info, .admonition.attention, .admonition.important
+    {background-color: #e8edfc; border-color: #94A7BF;}
+
+    .info p.admonition-title, .attention p.admonition-title, .important p.admonition-title
+    {background-color: #7088A0; border-color: #94A7BF;}
+
+    mark {background-color: #e7d600; padding: 0.2em;}
+
+    .bookbar {padding: 10px; border: 1px solid #ccc; border-width: 1px 0; overflow: auto}
+    .bookbar li {display: inline-block;}
+    .bookbar ul {margin: 0}
+    .breadcrumbs {float: left;}
+    .breadcrumbs li:after {content: "\\0BB \\020" /* » */; padding-left: 0.6em;}
+    .breadcrumbs li:last-child:after {content: ""}
+    .booknav {float:right;}
+    .booknav li {padding: 0 1.0em;}
+
+    #content {display: table-row;}
+
+    #sidebar {display: table-cell; width: 240px; font-size: small; background-color: #eeeeee;}
+    #sidebar ul ul {margin: 5px 0px 0px 5px;}
+    #sidebar ul ul li {margin-left: 10px;}
+    #sidebar ul {list-style: decimal;}
+    #sidebar ul ul {list-style: lower-alpha;}
+    #sidebar ul ul ul {list-style: lower-roman;}
+    #sidebar li.active > a {font-weight: bold}
+
+    #content-body {padding: 20px; font-size: 16px;}
+
+    #footer {padding: 10px; font-size: small; }
+"""
+
+
+HTML_BEFORE = """
+	<div id="wrapper">
+	{bookbar}
+
+	<div id="content">
+
+	<div id="sidebar">
+	{side_navigation}
+	</div>
+
+	<div id="content-body">
+"""
+
+HTML_BOOKBAR = """
+	<div class="bookbar">
+		<ul class="breadcrumbs">
+			<li>{projectindex}</li>
+			<li class="active">{pagetitle}</li>
+		</ul>
+
+		{book_navigation}
+	</div>
+"""
+
+HTML_AFTER = """
+	</div> <!-- contentbody -->
+	</div> <!-- content -->
+
+	{bookbar}
+
+	<div id="footer">
+	</div>
+
+	</div> <!-- wrapper -->
+"""
+
 
 # =======================
 # == methods: system ====
@@ -774,6 +999,8 @@ def get_args():
 	style.add_argument("--highlight-no", help="No highlight", action='store_true')
 	style.add_argument("--tpl", metavar="FILE",
 		    help="Template file. Can enter 'default' for pandoc's default.")
+	style.add_argument("--tpl-pandy", help="Pandy's embebed template: simple and not that ugly", 
+		                              action='store_true')
 
 	other = parser.add_argument_group(' other')
 	other.add_argument("--toc", help="include TOC", action='store_true')
@@ -830,6 +1057,7 @@ def get_args():
 		'no_side_toc' : 'NAV_SIDEBAR_TOC',
 		'from': 'FORMAT_FROM',
 		'to': 'FORMAT_TO',
+		'tpl_pandy': "TEMPLATE_PANDY",
 
 		#convert to upper
 		'pandoc': 'PANDOC',
@@ -918,6 +1146,10 @@ def prepare_args(arg_dict):
 			settings_final['NAV_TITLE']   = False
 			settings_final['NAV_SIDEBAR'] = False
 			settings_final['USE_NAV']     = False
+
+	if settings_final['TEMPLATE_PANDY'] and settings_final['TEMPLATE']:
+		msg("How cute, but you have to specify only one. Disabling pandy's")
+		settings_final['TEMPLATE_PANDY'] = False 
 
 	return settings_final
 
@@ -1266,6 +1498,13 @@ class Pandy(object):
 		index_title = self.db_files['index']['title']
 		self.command.append('--variable=project-title:' + index_title)
 
+		if self.settings['TEMPLATE_PANDY']:
+			#just in case
+			for index in range(len(self.command)):
+				if self.command[index].startswith("--template"):
+					del self.command[index]
+					break 
+
 		# process files 
 		totalFiles = len(self.files)
 		for i in range(0, totalFiles):
@@ -1290,12 +1529,10 @@ class Pandy(object):
 				nextt['title']       = ""		
 
 			newcommand = list(self.command)
-			newcommand += ['-o', current['real_output']]
-
 			path_mkdir(path_get(current['real_output']))
 
-			tmp = '<a href="' + current['index_url'] +'">' +  index_title + "</a>"
-			newcommand.append('--variable=project-index:' + tmp)
+			proj_index = '<a href="' + current['index_url'] +'">' +  index_title + "</a>"
+			newcommand.append('--variable=project-index:' + proj_index)
 
 			book_navigation    = self._bookNavigation(current, prev, nextt)
 			sidebar_navigation = self.makeNavigationLinks(href_active=current['output'])
@@ -1306,17 +1543,38 @@ class Pandy(object):
 			if self.settings['USE_NAV']:
 				newcommand.append('--variable=book_navigation:' + book_navigation)
 
-			run_subprocess(newcommand, True, current['text'])
-
+			self.finallySave(newcommand, current, book_nav=book_navigation, sidebar=sidebar_navigation, 
+				            projindex=proj_index, pagetitle=current['title'])
+		
 		msg("Processing: index")
 
 		index_cmd = list(self.command)
 		if "--toc" in index_cmd:
 			index_cmd.remove("--toc")
 
-		index_cmd += ['-o', self.db_files['index']['real_output'], 
-		             '--metadata=title:' + index_title]
-		run_subprocess(index_cmd, True, self.db_files['index']['text'])		
+		index_cmd.append('--metadata=title:' + index_title)
+
+		self.finallySave(index_cmd, self.db_files['index'], projindex=self.db_files['index']['title'])
+
+
+	def finallySave(self, command, current_file, **kwargs):
+		""" (book) Save according to template option 
+
+		:command       current state of command 
+		:current file  current file properties/dict 
+		:**kwargs      key=value for builtintpl (book_nav, sidebar, projindex, pagetitle)
+		"""
+
+		local_cmd = list(command)
+
+		if not self.settings['TEMPLATE_PANDY']:
+			local_cmd += ['-o', current_file['real_output']]
+			run_subprocess(local_cmd, True, current_file['text'])
+		else: 
+			trying = run_subprocess(local_cmd, True, current_file['text'])
+			this_text = builtintpl(str(trying, encoding='utf-8'), **kwargs)		
+			
+			save(current_file['real_output'], this_text)			
 
 	def _getOutputPath(self, filepath, strip_root=False):
 		"""Get output path"""
@@ -1485,6 +1743,40 @@ class Pandy(object):
 			final += li
 
 		return "<ul>" + final + "</ul>"
+
+
+def builtintpl(html, book_nav='', sidebar='', projindex='', pagetitle=''):
+	"""Custom/embebed template; using pandoc's default"""
+
+
+	#plain splitting
+
+	head_split = html.split("</head>")
+	head = head_split[0]
+	body = head_split[1]
+
+	head_final = head + '<style type="text/css">' + HTML_CSS +  "</style>" + "</head>"
+
+	bookbar = HTML_BOOKBAR.format(projectindex=projindex, pagetitle=pagetitle, 
+		           book_navigation=book_nav)
+
+	code_before = HTML_BEFORE.format(bookbar=bookbar, side_navigation=sidebar)
+	code_after = HTML_AFTER.format(bookbar=bookbar)
+
+	body_split = body.split('<body>')
+	body = body_split[1]
+
+	body_final = '<body>' + code_before + body 
+	body_split = body_final.split('</body>')
+	body = body_split[0]
+	body_final = body + code_after + '</body>' + body_split[1]
+
+	return head_final + body_final
+
+
+
+
+
 
 if __name__ == '__main__':
 
