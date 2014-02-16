@@ -16,7 +16,7 @@
 # custom css/js: --include-in-header
 #
 # wikilinks: fix when in sub and using [:file] to refer to one in root
-
+# if beautifulsoup, can use book with any format and not ony markdown
 
 import sys
 
@@ -44,10 +44,10 @@ except ImportError:
 # ==============================
 
 __version__ = "2.0"
-_MY_USAGE = ''' %(prog)s [source] [format_from] [format_to] [other options]
+_MY_USAGE = ''' %(prog)s [source] [options]
  
  [format_to] can be a list of formats; separated with spaces 
- [source]    can be a file, folder or a .list
+ [source]    can be a file, folder, .list or config file (.ini)
 '''
 # must replace the lists inside. This is just to have a bit of order.
 _MY_DESCRIPTION = '''
@@ -259,10 +259,15 @@ def cmd_open_file(path):
 	with cmd_open_write(path, 'r') as readme:
 		return readme.read()
 
-def get_ini(filepath, keys_upper=False):
+def get_ini(filepath, keys_upper=False, space_list=None):
 	"""Read ini without headers (ignores them). Return dict
-	keys_upper: if key (options) are returned as uppercase. 
+
+	:keys_upper: if key (options) are returned as uppercase. 
+	:space_list  a list/tuple of keys that (the value) is a space separated list
 	"""
+
+	# lets be nice and convert to lowercase
+	[z.lower() for z in space_list]
 
 	import configparser
 	config = configparser.ConfigParser(empty_lines_in_values=False)
@@ -295,6 +300,10 @@ def get_ini(filepath, keys_upper=False):
 				pass
 			else:
 				value = config.getboolean(key)
+
+		if key.lower() in space_list:
+			# must do checking for string only
+			value = value.split()
 
 		if keys_upper:
 			key = key.upper()
@@ -722,24 +731,6 @@ class InputExist(argparse.Action):
 
 		setattr(namespace, self.dest, values)
 
-class ValueCorrect(argparse.Action):
-	""" Custom action for args, if value is correct """
-
-	def __call__(self, parser, namespace, values, option_string=None):
-
-		if self.dest == "format_from" and values not in _FORMATS_BOTHWAYS:
-			parser.error('Incorrect format')
-
-		if self.dest == "format_to":
-			FORMATS_TO = _FORMATS_BOTHWAYS + _FORMATS_OUTPUT
-
-			for val in values:
-				if val not in FORMATS_TO:
-					parser.error('Incorrect format')
-					break
-
-		setattr(namespace, self.dest, values)
-
 def get_args():
 	""" Args parsing and translation to nice configs"""
 
@@ -749,13 +740,12 @@ def get_args():
 		        , formatter_class=argparse.RawTextHelpFormatter) 
 
 	required = parser.add_argument_group(' Required')
-	required.add_argument("source", action=InputExist, help="file, folder, .list or config file")
+	required.add_argument("source", action=InputExist, help="file, folder, .list or config file (.ini)")
 	
 	option_file = parser.add_argument_group(' Options:\n\n file related')
-	option_file.add_argument("--from", '-f', action=ValueCorrect, help="Convert from this")
-	option_file.add_argument("--to", '-t',   action=ValueCorrect, nargs='+', 
-		    help="Convert to this (can be a list)")
-
+	option_file.add_argument("--from", '-f', metavar="", choices= _FORMATS_BOTHWAYS, help="Convert from this")
+	option_file.add_argument("--to", '-t', nargs='*', choices= _FORMATS_BOTHWAYS + _FORMATS_OUTPUT, 
+		    metavar="", help="Convert to this (can be a space separated list)")
 	option_file.add_argument("--output", "-o", help="Output folder", metavar="FOLDER")
 	option_file.add_argument("--flat", action='store_true', help="Don't keep folder structure")
 	option_file.add_argument("--self", help="self contained file", action='store_true')	
@@ -816,6 +806,8 @@ def get_args():
 	nocateg.add_argument('--version', action='version', version='%(prog)s ' + __version__)
 
 	arg_dict = vars(parser.parse_args())
+	if arg_dict['to'] is not None:
+		arg_dict['to'] = set(arg_dict['to'])
 
 	#convert those ugly names to the nice ones
 	argsToSettings = {
@@ -885,7 +877,7 @@ def prepare_args(arg_dict):
 	# complete missing options. default <- .ini <- args 
 	# read ini and replace default
 	if os.path.exists(settings_final['CONFIG_FILE']):
-		settings_file = get_ini(settings_final['CONFIG_FILE'], True)
+		settings_file = get_ini(settings_final['CONFIG_FILE'], True, space_list=('format_to'))
 		settings_final.update(settings_file)
 
 	#remove config option (just because)
@@ -1134,10 +1126,6 @@ class Pandy(object):
 			self._parseMerge()
 
 		if book:
-			if not self.format_from == 'markdown':
-				print(" Book only for markdown, sorry")
-				exit()
-
 			if "html" not in self.format_to:
 				print ("  Book only works for HTML")
 				exit()
@@ -1146,6 +1134,10 @@ class Pandy(object):
 				answer = msg_cli_yesno("  Only HTML is being converted.")
 				if not answer:
 					exit()
+
+			if not self.format_from == 'markdown' and not drinkSoup:
+				print(" Book only for markdown, or install BeautifulSoup and let the magic happen!")
+				exit()
 
 			if len(self.files) < 3:
 				print ("  Feed me more files to make something pretty :) . ")
@@ -1248,6 +1240,7 @@ class Pandy(object):
 		# if we have a navigation file, have that as the file order
 		index_file = self.settings['FILE_INDEX']
 		if index_file and os.path.exists(index_file):
+			# ALL BELOW ONLY FOR MARKDOWN
 			index_text = cmd_open_file(index_file).splitlines()
 			files_order = extractMdLinks(index_text, extension="md")
 			self.files = orderListFromList(self.files, files_order, 1)
@@ -1381,6 +1374,7 @@ class Pandy(object):
 			props = self._fileMetadata(the_savior)
 			self.db_files[the_savior] = props 
 
+			# ALL BELOW ONLY FOR MARKDOWN
 			# create references, with and without extension and prepare string 
 			tmp_output       = self.db_files[the_savior]['output']
 			tmp_file         = path_getFilename(the_savior)
@@ -1415,6 +1409,7 @@ class Pandy(object):
 		properties['index_url']   = path_relative_to(
 				            os.path.join(self.output, 'index.html'), properties['real_output'])
 
+		# IF MARKDOWN, FIND TITLE IN RAW, OTHERWISE CONVERT TO HTML
 		tmp = findTitleMd(filepath)
 		if tmp:
 			properties['title'] = tmp
@@ -1422,15 +1417,15 @@ class Pandy(object):
 		with cmd_open_write(filepath, 'r') as tmp:
 			cmd_text = tmp.readlines()
 
+		# SPECIAL ELEMENTS ONLY FOR MARKDOWN 
 		cmd_text, _ = if_special_elements(cmd_text, self.settings['TOC_TAG'])
-
 		cmd_text, _ = parse_wikilinks(cmd_text, this_references=self.references_list)
 		cmd_text = "".join(cmd_text)
 		cmd_text += "\n\n" + self.references_all
 
 		properties['text'] = cmd_text
 
-		# Magic begins! 
+		# Magic begins! extract TOC
 		cmd = list() 
 		cmd.append(self.settings['PANDOC'])
 		cmd.append('--toc')
