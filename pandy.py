@@ -907,7 +907,7 @@ def prepare_args(arg_dict):
 		settings_final['TEMPLATE'] = ""
 
 	if settings_final['SOURCE'].endswith(".list") and not settings_final['OUTPUT_FLAT']:
-		print("  Keeping folder structure with .list not supported. Skipping option")
+		msg("Keeping folder structure with .list not supported. Skipping option")
 		settings_final['OUTPUT_FLAT'] = True 
 
 	#Special belonging if not book, just to clean up
@@ -926,7 +926,7 @@ def prepare_args(arg_dict):
 # ============
 
 def getTOC(html):
-	"""Returns the TOC list str (splitting from <body>)	"""
+	"""Returns the TOC list as str (splitting from <body>) """
 
 	if drinkSoup:
 		soup = BeautifulSoup(html)
@@ -1014,6 +1014,15 @@ def help_replaceStringFormats(string, placeholders):
 		string = string.replace(placeholder, tmp)
 
 	return string
+
+def msg(message, indent=2):
+	""" Because I always forget to include X spaces in the beginning 
+
+	:message     string message
+	:indent  amount of spaces
+	"""
+
+	print(" "*indent + message)
 
 # ==============
 # == Pandy! ====
@@ -1118,16 +1127,16 @@ class Pandy(object):
 
 		# File or files in folder / list
 		if not merge and not book:
-			print ("  Parsing files individually ... \n")
+			msg("Parsing files individually ... \n")
 			self._parseIndividually()
 
 		if merge:
-			print ("  Parsing files and merging ... \n")
+			msg("Parsing files and merging ... \n")
 			self._parseMerge()
 
 		if book:
 			if "html" not in self.format_to:
-				print ("  Book only works for HTML")
+				msg("Book only works for HTML")
 				exit()
 
 			if len(self.format_to) > 1 and "html" in self.format_to:
@@ -1135,12 +1144,8 @@ class Pandy(object):
 				if not answer:
 					exit()
 
-			if not self.format_from == 'markdown' and not drinkSoup:
-				print(" Book only for markdown, or install BeautifulSoup and let the magic happen!")
-				exit()
-
 			if len(self.files) < 3:
-				print ("  Feed me more files to make something pretty :) . ")
+				msg("Feed me more files to make something pretty :) ")
 				exit()
 
 			# check if there is an output path, if not use
@@ -1149,13 +1154,14 @@ class Pandy(object):
 				if not self.input == os.getcwd():
 					self.output = os.getcwd()
 				else:
-					print ("  How can I put this... You haven't specified",
-					'an output directory and the source is the \n',
-					"current running directory.", 
-					"Sorry, this is out of my league; check and run again")
+					msg("How can I put this... You haven't specified an output directory and the source is the \n current running directory.")
+					msg("Sorry, this is out of my league; check and run again")
 					exit()
- 
-			print ("  Parsing files and making book ... \n")
+
+			if not self.format_from == 'markdown':
+				msg("Not using markdown; no goodies for you.") 
+
+			msg("Parsing files and making book ... \n")
 			self._parseBook()
 
 	def _parseIndividually(self):
@@ -1164,7 +1170,7 @@ class Pandy(object):
 		for filey in self.files:
 			newcommand = list(self.command)
 			path       = self._getOutputPath(filey)
-			print (" Converting: " + path_getFilename(filey))
+			msg("Converting: " + path_getFilename(filey))
 
 			for ext in self.format_to:
 
@@ -1237,10 +1243,9 @@ class Pandy(object):
 		if "--toc" in self.command:
 			self.command.remove("--toc")
 
-		# if we have a navigation file, have that as the file order
+		# if we have a navigation file, have that as the file order (only markdown)
 		index_file = self.settings['FILE_INDEX']
-		if index_file and os.path.exists(index_file):
-			# ALL BELOW ONLY FOR MARKDOWN
+		if index_file and os.path.exists(index_file) and self.format_from == 'markdown':
 			index_text = cmd_open_file(index_file).splitlines()
 			files_order = extractMdLinks(index_text, extension="md")
 			self.files = orderListFromList(self.files, files_order, 1)
@@ -1255,7 +1260,7 @@ class Pandy(object):
 
 		self.settings['FILE_INDEX'] = index_file
 
-		print (" Scanning files, hold on...")
+		msg("Scanning files, hold on...")
 		self._dbInit()
 
 		index_title = self.db_files['index']['title']
@@ -1268,7 +1273,7 @@ class Pandy(object):
 				continue
 
 			current = self.db_files[self.files[i]]
-			print (" Processing: " + path_getFilename(current['path_input']))
+			msg("Processing: " + path_getFilename(current['path_input']))
 
 			prev = self.db_files[self.files[i - 1]]
 
@@ -1303,8 +1308,7 @@ class Pandy(object):
 
 			run_subprocess(newcommand, True, current['text'])
 
-		# process index 
-		print (" Processing: index.md")
+		msg("Processing: index")
 
 		index_cmd = list(self.command)
 		if "--toc" in index_cmd:
@@ -1359,7 +1363,7 @@ class Pandy(object):
 		return '<ul class="booknav">' + navPre + navIndex + navNext + '</ul>'
 
 	def _dbInit(self):
-		"""Init dbfiles with props """
+		"""Init dbfiles with properties """
 
 		self.db_files['index'] = {
 			'title': "Index",
@@ -1374,8 +1378,8 @@ class Pandy(object):
 			props = self._fileMetadata(the_savior)
 			self.db_files[the_savior] = props 
 
-			# ALL BELOW ONLY FOR MARKDOWN
 			# create references, with and without extension and prepare string 
+			# only for markdown, but memory is inexpensive
 			tmp_output       = self.db_files[the_savior]['output']
 			tmp_file         = path_getFilename(the_savior)
 			tmp_file_extless = path_delExtension(tmp_file)
@@ -1409,19 +1413,20 @@ class Pandy(object):
 		properties['index_url']   = path_relative_to(
 				            os.path.join(self.output, 'index.html'), properties['real_output'])
 
-		# IF MARKDOWN, FIND TITLE IN RAW, OTHERWISE CONVERT TO HTML
-		tmp = findTitleMd(filepath)
-		if tmp:
-			properties['title'] = tmp
-
 		with cmd_open_write(filepath, 'r') as tmp:
 			cmd_text = tmp.readlines()
 
-		# SPECIAL ELEMENTS ONLY FOR MARKDOWN 
-		cmd_text, _ = if_special_elements(cmd_text, self.settings['TOC_TAG'])
-		cmd_text, _ = parse_wikilinks(cmd_text, this_references=self.references_list)
-		cmd_text = "".join(cmd_text)
-		cmd_text += "\n\n" + self.references_all
+		if not self.format_from == 'markdown':
+			cmd_text = "".join(cmd_text)
+		else:
+			tmp = findTitleMd(filepath)
+			if tmp:
+				properties['title'] = tmp
+
+			cmd_text, _ = if_special_elements(cmd_text, self.settings['TOC_TAG'])
+			cmd_text, _ = parse_wikilinks(cmd_text, this_references=self.references_list)
+			cmd_text = "".join(cmd_text)
+			cmd_text += "\n\n" + self.references_all
 
 		properties['text'] = cmd_text
 
