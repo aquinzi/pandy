@@ -151,7 +151,6 @@ _DEFAULT_CONFIG = {
 # for wiki links mostly
 ACCEPTED_MD_EXTENSIONS = ('md', 'txt', 'mdown', 'markdown')
 
-
 HTML_CSS = """
     *           { margin: 0; padding: 0; }
     html, body  { color: black; }
@@ -337,7 +336,6 @@ HTML_CSS = """
 
     #footer {padding: 10px; font-size: small; }
 """
-
 
 HTML_BEFORE = """
 	<div id="wrapper">
@@ -561,12 +559,6 @@ def run_subprocess(command, output=False, text=None):
 		tmp  = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True)
 		result = tmp.communicate(text)[0] # send stdin 
 		return result
-	"""
-	try:
-		except BrokenPipeError:
-			pass #Probably template doesn't exist
-		else:
-	"""
 
 def translate_synonyms(word):
 	"""Translate the synonyms to complete words"""
@@ -848,16 +840,18 @@ def parse_wikilinks(text, list_files=None, this_references=None):
 				if not title_old:
 					title_new = listing[key]['title']
 
+				# create ref
+				tmp = ref_tpl.format(thefile=filename, future_html=future_path)
+				if not tmp in references:
+					references.append(tmp)
+
+				tmp = [filename, title_old, title_new]
+				if not tmp in new_links:
+					new_links.append([filename, title_old, title_new])
+
 				break 				
 
-		# create ref
-		tmp = ref_tpl.format(thefile=filename, future_html=future_path)
-		if not tmp in references:
-			references.append(tmp)
 
-		tmp = [filename, title_old, title_new]
-		if not tmp in new_links:
-			new_links.append([filename, title_old, title_new])
 
 	# replace in text 
 	newtext     = "<<<<SPLITMEOVERHERE>>>>".join(text)
