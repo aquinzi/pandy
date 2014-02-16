@@ -344,7 +344,6 @@ def run_subprocess(command, output=False, text=None):
 		else:
 	"""
 
-
 def translate_synonyms(word):
 	"""Translate the synonyms to complete words"""
 
@@ -602,8 +601,9 @@ def parse_wikilinks(text, list_files=None, this_references=None):
 	ref_tpl = "[{thefile}]: {future_html}"
 	
 	#hold filename, title_old and title_new. For later text replacement
-	new_links = list()   
+	new_links = list() 
 
+	
 	for link in links:
 		filename    = link[0]
 		title_old   = link[1]
@@ -946,28 +946,20 @@ def prepare_args(arg_dict):
 # === Html stuff ===
 # ==================
 
-def getSplitTocBody(html, html_ver):
+def getSplitTocBody(html):
 	"""Returns the TOC list and the rest of the html body.
 	(splitting from <body>)
 
 	toc    str 
 	body   str, whatever after toc
+	"""
 
-	:html_ver   for toc splitting.
-	            html5 -> nav 
-	            html -> div 
-	"""
-	"""
 	if not drinkSoup:
 		text = html.split("<body>")[1]
 		text = text.split("</body>")[0]
-		
-		toc_tag = "nav"
-		if not html_ver == "html5":
-			toc_tag = "div"
 
-		if not 'id="TOC">' in text:
-			return '', text.split('</' + toc_tag + '>')[1]
+		if not '<div id="TOC">' in text:
+			return '', text.split('</div>')[1]
 
 		text = text.split('<div id="TOC">')[1]
 		text_parts = text.split('</div>')
@@ -977,24 +969,22 @@ def getSplitTocBody(html, html_ver):
 		toc = [line for line in toc if line]
 		#toc = toc[1:-1] # remove first <ul> and last </ul>
 		toc = "".join(toc)
-		return toc, body
-
 	else:
-	"""
-	soup = BeautifulSoup(html)
-	soup = soup.body
+		soup = BeautifulSoup(html)
+		soup = soup.body
 
-	toc = soup.find(id='TOC')
-	if toc:
-		toc = toc.extract()
-		toc = str(toc)
-	else:
-		toc = ''
+		toc = soup.find(id='TOC')
+		if toc:
+			toc = toc.extract()
+			toc = toc.ul
+			toc = str(toc)
+		else:
+			toc = ''
 
-	header = soup.find(id='header')
-	header.extract()
+		header = soup.find(id='header')
+		header.extract()
 
-	body = str(soup.renderContents(), encoding="utf-8")
+		body = str(soup.renderContents(), encoding="utf-8")
 
 	return toc, body
 
@@ -1167,66 +1157,63 @@ class Pandy(object):
 		merge = self.settings['MERGE']
 		book  = self.settings['BOOK']
 
-		cmd_antibook = list()
-		cmd_antibook.append('--standalone')
+		if (not merge and not book) or merge and not book:
+			cmd_antibook = list()
+			cmd_antibook.append('--standalone')
 
-		# Exclude: do not treat right now or already done
-		exclude = ("FORMAT_TO", "FORMAT_FROM", "SOURCE", "OUTPUT_PATH", "MERGE",
-			"OUTPUT_FLAT", "SLIDES", "BOOK", "HTML_VER", "PANDOC", "FILE_INDEX")
-
-		# Add the options
-		for key, val in self.settings.items():
-			if key in exclude:
-				continue
-			cmd_antibook += translate_argsPandoc(key, val)
+			# Add the options
+			for key, val in self.settings.items():
+				# Exclude: do not treat right now or already done
+				if key in ("FORMAT_TO", "FORMAT_FROM", "SOURCE", "OUTPUT_PATH", "MERGE",
+				          "OUTPUT_FLAT", "SLIDES", "BOOK", "HTML_VER", "PANDOC", "FILE_INDEX"):
+					continue
+				cmd_antibook += translate_argsPandoc(key, val)
 		
-		print("")
+			self.command += cmd_antibook
+
 		# File or files in folder / list
 		if not merge and not book:
 			print ("  Parsing files individually ... \n")
-			self.command += cmd_antibook
 			self._parseIndividually()
 
-		else:
-			if merge:
-				print ("  Parsing files and merging ... \n")
-				self.command += cmd_antibook
-				self._parseMerge()
-			else:
-				# book
-				if not self.format_from == 'markdown':
-					print(" Book only for markdown, sorry")
+		if merge:
+			print ("  Parsing files and merging ... \n")
+			self._parseMerge()
+
+		if book:
+			if not self.format_from == 'markdown':
+				print(" Book only for markdown, sorry")
+				exit()
+
+			# check if there is html in the output formats. 
+			# If there are more than html or none, inform
+			if "html" not in self.format_to:
+				print ("  Book only works for HTML")
+				exit()
+
+			if len(self.format_to) > 1 and "html" in self.format_to:
+				answer = msg_cli_yesno("  Only HTML is being converted.")
+				if not answer:
 					exit()
 
-				# check if there is html in the output formats. 
-				# If there are more than html or none, inform
-				if "html" not in self.format_to:
-					print ("  Book only works for HTML")
+			if len(self.files) < 3:
+				print ("  Feed me more files to make something pretty :) . ")
+				exit()
+
+			# check if there is an output path, if not use
+			# current working ONLY if source is not current working directory
+			if not self.output:
+				if not self.input == os.getcwd():
+					self.output = os.getcwd()
+				else:
+					print ("  How can I put this... You haven't specified",
+					'an output directory and the source is the \n',
+					"current running directory.", 
+					"Sorry, this is out of my league; check and run again")
 					exit()
-
-				if len(self.format_to) > 1 and "html" in self.format_to:
-					answer = msg_cli_yesno("  Only HTML is being converted.")
-					if not answer:
-						exit()
-
-				if len(self.files) < 3:
-					print ("  Feed me more files to make something pretty :) . ")
-					exit()
-
-				# check if there is an output path, if not use
-				# current working ONLY if source is not current working directory
-				if not self.output:
-					if not self.input == os.getcwd():
-						self.output = os.getcwd()
-					else:
-						print ("  How can I put this... You haven't specified",
-						'an output directory and the source is the \n',
-						"current running directory.", 
-						"Sorry, this is out of my league; check and run again")
-						exit()
-	 
-				print ("  Parsing files and making book ... \n")
-				self._parseBook()
+ 
+			print ("  Parsing files and making book ... \n")
+			self._parseBook()
 
 	def _parseIndividually(self):
 		"""Parses file individually """
@@ -1322,22 +1309,22 @@ class Pandy(object):
 		self.settings['FILE_INDEX'] = index_file
 		self._dbInit()
 		
-		self.command.append('-t')
-		self.command.append('html')
-		cmd_antibook = list()
+		#add original command settings
+		self.command += ['-t', 'html', '--standalone']
 
-		# Exclude: do not treat right now or already done
-		exclude = ("FORMAT_TO", "FORMAT_FROM", "SOURCE", "OUTPUT_PATH", "MERGE",
-			"OUTPUT_FLAT", "SLIDES", "BOOK", "HTML_VER", "PANDOC", "FILE_INDEX", "TOC")
-
-		# Add the options
 		for key, val in self.settings.items():
-			if key in exclude:
+			# Exclude: do not treat right now or already done
+			if key in ("FORMAT_TO", "FORMAT_FROM", "SOURCE", "OUTPUT_PATH", "MERGE", "TOC",
+			          "OUTPUT_FLAT", "SLIDES", "BOOK", "HTML_VER", "PANDOC", "FILE_INDEX"):
 				continue
-			cmd_antibook += translate_argsPandoc(key, val)
+			self.command += translate_argsPandoc(key, val)
+
+		totalFiles = len(self.files)
+		index_title = self.db_files['index']['title']
+		self.command.append('--variable=project-title:' + index_title)
 
 		# process files 
-		for i in range(0, len(self.files)):
+		for i in range(0, totalFiles):
 			if 'index.' in self.db_files[self.files[i]]['path_input']:
 				continue
 
@@ -1346,7 +1333,12 @@ class Pandy(object):
 
 			prev = self.db_files[self.files[i - 1]]
 
-			if (i + 1) < len(self.files):
+			if 'index.' in prev['path_input']:
+				prev = dict()
+				prev['real_output'] = ""
+				prev['title']       = ""
+
+			if (i + 1) < totalFiles:
 				nextt = self.db_files[self.files[i + 1]]
 			else: 
 				nextt = dict() 
@@ -1354,39 +1346,21 @@ class Pandy(object):
 				nextt['title']       = ""		
 
 			newcommand = list(self.command)
-
-			#add original command settings
-			newcommand += cmd_antibook
 			newcommand += ['-o', current['real_output']]
-			newcommand.append('--standalone')
 
 			path_mkdir(path_get(current['real_output']))
 
-			# re add title (for <title> and first heading)
-			#newcommand.append('--metadata=title:' + current['title'])
-			newcommand.append('--variable=project-title:' + self.db_files['index']['title'])
-
-			tmp = '<a href="' + current['index_url'] +'">' +  self.db_files['index']['title'] + "</a>"
+			tmp = '<a href="' + current['index_url'] +'">' +  index_title + "</a>"
 			newcommand.append('--variable=project-index:' + tmp)
 
-			# navigations
-			if 'index.' in prev['path_input']:
-				prev = dict()
-				prev['real_output'] = ""
-				prev['title'] = ""
-
-			book_navigation = self._bookNavigation(current, prev, nextt)
-
+			book_navigation    = self._bookNavigation(current, prev, nextt)
 			sidebar_navigation = self.makeNavigationLinks(href_active=current['output'])
 
 			if self.settings['NAV_SIDEBAR']:
 				newcommand.append('--variable=side_navigation:' +sidebar_navigation)
 
-			#if self.settings['USE_NAV']:
-			#apeeend = '-V booknavigation:' + book_navigation
-			apeeend = '--variable=booknav:assadasaslj kdhgdkf g dkfjghdkfjg dfkgjdf fdf kjh'
-			#-V KEY[=VAL], --variable=KEY[:VAL]
-			newcommand.append('--variable=booknav:assadasaslj')
+			if self.settings['USE_NAV']:
+				newcommand.append('--variable=book_navigation:' + book_navigation)
 
 			run_subprocess(newcommand, True, current['text'])
 
@@ -1394,17 +1368,11 @@ class Pandy(object):
 		print (" Processing: index.md")
 
 		index_cmd = list(self.command)
-
 		if "--toc" in index_cmd:
 			index_cmd.remove("--toc")
 
-		if os.path.exists(self.db_files['index']['path_input']):
-			self.db_files['index'] = self._fileParseBody(self.db_files['index'], index_cmd)
-
-		else:
-			self.db_files['index']['text'] = self.makeNavigationLinks(isIndex=True)
 		index_cmd += ['-o', self.db_files['index']['real_output'], 
-		             '--metadata=title:' + self.db_files['index']['title']]
+		             '--metadata=title:' + index_title]
 		run_subprocess(index_cmd, True, self.db_files['index']['text'])		
 
 	def _getOutputPath(self, filepath, strip_root=False):
@@ -1485,7 +1453,9 @@ class Pandy(object):
 			
 		if os.path.exists(self.settings['FILE_INDEX']):
 			props = self._fileMetadata(self.settings['FILE_INDEX'])
-			self.db_files['index']['title'] = props['title']
+			self.db_files['index'].update(props)
+		else:
+			self.db_files['index']['text'] = self.makeNavigationLinks(isIndex=True)
 
 	def _fileMetadata(self, filepath):
 		"""for book. Get file properties: output path, input path, md title """
@@ -1524,40 +1494,15 @@ class Pandy(object):
 		minimum = run_subprocess(cmd, True, cmd_text)
 		minimum = str(minimum, encoding='utf8')
 
-		properties['toc'], _ = getSplitTocBody(minimum, html_ver=self.settings['HTML_VER']) 
+		#remove new lines to not break pandoc
+		minimum = minimum.splitlines()
+		minimum = "".join(minimum)
+		
+		properties['toc'], _ = getSplitTocBody(minimum) 
 		
 		return properties
 
 
-
-
-	def _fileParseBody(self, fileprops, cmd):
-		"""Parse the file body """
-
-		# Magic begins! 
-		cmd = list(cmd) 
-		cmd.append('--toc')
-		cmd.append('--standalone')
-				
-		# Special syntax 
-		with cmd_open_write(fileprops['path_input'], 'r') as tmp:
-			cmd_text = tmp.readlines()
-
-		cmd_text, _ = if_special_elements(cmd_text, self.settings['TOC_TAG'])
-
-		cmd_text, _ = parse_wikilinks(cmd_text, this_references=self.references_list)
-		cmd_text = "".join(cmd_text)
-		cmd_text += "\n\n" + self.references_all
-
-		minimum = run_subprocess(cmd, True, cmd_text)
-		minimum = str(minimum, encoding='utf8')
-
-		#extract toc
-		fileprops['toc'] = ""
-		fileprops['toc'], fileprops['text'] = getSplitTocBody(minimum, html_ver=self.settings['HTML_VER']) 
-		print(fileprops['text'].encode('utf-8'))
-
-		return fileprops
 
 	def makeNavigationLinks(self, href_active=None, isIndex=False):
 		"""make the whole book navigation: 
@@ -1582,26 +1527,27 @@ class Pandy(object):
 
 			if not isIndex:
 				real_href = path_relative_to(href, href_active)
+
 				if href == href_active:
 					info_active = " class='active'"
-					info_toc = current['toc']
+					info_toc = current['toc'].replace("\\n", "")
 			else:
 				real_href = href
 				info_toc = current['toc'].replace('<a href="#', '<a href="' + real_href + "#")
 
 			anchor = anchor_tpl.format(href=real_href, title=title)
-			li = "<li{active}>" + anchor + "{toc}</li>\n"
+			li = "<li{active}>" + anchor + "{toc}</li>"
 			li = li.format(active=info_active, toc=info_toc)
 			
 			final += li
 
-		return "<ul>\n" + final + "</ul>"
+		return "<ul>" + final + "</ul>"
 
 if __name__ == '__main__':
 
 	args = get_args()
 
-	print ("\n  ------------------ STARTING ------------------------------")
+	print ("\n  ------------------ STARTING... ---------------------------\n ")
 	CONFIG = prepare_args(args)
 
 	# steady, ready, go!
