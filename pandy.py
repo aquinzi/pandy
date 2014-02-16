@@ -16,7 +16,6 @@
 # custom css/js: --include-in-header
 #
 # wikilinks: fix when in sub and using [:file] to refer to one in root
-# pandoc variables not working!
 
 
 import sys
@@ -36,8 +35,8 @@ try:
 	from bs4 import BeautifulSoup
 	drinkSoup = True 
 except ImportError:
-	pass
 	# Dale, hacemela mas dificil
+	pass
 
 
 # ==============================
@@ -103,8 +102,6 @@ _COMMANDS_COMPLETE = {
 	'FILE_FOOTER'  : "--include-after-body=",
 	}
 
-# leave out mmd_title_block and use yaml_metadata_block. Activated by default
-# and can include the variables easily in template
 EXTENSIONS_EXTRA  = ('link_attributes', 'hard_line_breaks')
 
 # =======================
@@ -183,6 +180,7 @@ def path_delExtension(file_path):
 	return path
 
 def path_lastDir(path):
+	""" Parent folder name """
 
 	return os.path.split(path)[1]
 
@@ -263,56 +261,48 @@ def cmd_open_file(path):
 
 def get_ini(filepath, keys_upper=False):
 	"""Read ini without headers (ignores them). Return dict
-	keys_upper: if key (options) are returned as uppercase. If false, returns as they're
+	keys_upper: if key (options) are returned as uppercase. 
 	"""
 
-	comment_char = '#'
-	option_char  =  '='
+	import configparser
+	config = configparser.ConfigParser(empty_lines_in_values=False)
+
+	# config parser doesnt parse ini without section, fake it
+	dummy_section_name = "sexysettings"
+	dummy_file = "[" + dummy_section_name + "]\n"
+	
+	with open(filepath) as dumb:
+	    dummy_file += dumb.read()
+
+	config.read_string(dummy_file, source=filepath)
+	
+	config = config[dummy_section_name]
+
 	tmp_options  = dict()
+	for key, value in list(config.items()):
 
-	cmd_open = cmd_open_write(filepath, 'r')
-	
-	with cmd_open as infile:
-		for line in infile:
-			# ignore sections
-			if line.startswith("["):
-				continue
-				
-			# remove inline comments
-			if not line.startswith(comment_char) and comment_char in line:
-				line, comment = line.split(comment_char)
-			
-			# get the options / values
-			if option_char in line:
-				option, value = line.split(option_char)
-				option = option.strip()
-				value = value.strip()
-				
-				#cleans those " """' '''''"
-				value = value.replace("'", "")
-				value = value.replace('"', "")
+		#Convert booleans, ints, lists
+		if value.isnumeric():
+			value = int(value)
+		elif value.startswith("[") and value.endswith("]"):
+			value = value[1:len(value)-1]
+			value = value.split(",")
+		else:
+			# booleans can accept true/false, yes/no
+			try:
+				config.getboolean(key)
+			except ValueError:
+				pass
+			else:
+				value = config.getboolean(key)
 
-				#check for booleans, ints, lists
-				if value.lower() in ("true", "false"):
-					if value.lower() == "true":
-						value = True
-					else:
-						value = False
-				elif value.isnumeric():
-					value = int(value)
-				elif value.startswith("[") and value.endswith("]"):
-					value = value[1:len(value)-1]
-					value = value.split(",")
-					
-					for index in range(len(value)):
-						value[index] = value[index].strip()
+		if keys_upper:
+			key = key.upper()
+		
+		tmp_options[key] = value	
 
-				if keys_upper:
-					option = option.upper()
-				
-				tmp_options[option] = value
-	
 	return tmp_options
+
 
 # =========================
 # == methods: commands ====
@@ -598,35 +588,33 @@ def parse_wikilinks(text, list_files=None, this_references=None):
 	links = extractMdLinks(text, extension=extensions, referencestyle=True)
 
 	references = list()
-	ref_tpl = "[{thefile}]: {future_html}"
-	
-	#hold filename, title_old and title_new. For later text replacement
-	new_links = list() 
+	ref_tpl    = "[{thefile}]: {future_html}"
+	new_links  = list() #filename, title_old and title_new. Later text replacement
 
-	
+	search_in_prop = False
+	listing = this_references
+	if list_files is not None:
+		listing = list_files
+		search_in_prop = True 
+
 	for link in links:
 		filename    = link[0]
 		title_old   = link[1]
 		future_path = ""
 		title_new   = title_old
 
-		if list_files is not None:
-			# find output and title
-			for key in list_files:
-				if filename in list_files[key]['path_input']:
-					future_path = list_files[key]['output']
-					
-					if not title_old:
-						title_new = list_files[key]['title']
-					break 
-		else:
-			for key in this_references:
-				if filename in key:
-					future_path  = this_references[key]['output']
+		for key in listing:
+			look_here = key
+			if search_in_prop:
+				look_here = listing[key]['path_input']
 
-					if not title_old:
-						title_new = this_references[key]['title']
-					break
+			if filename in look_here:
+				future_path = listing[key]['output']
+					
+				if not title_old:
+					title_new = listing[key]['title']
+
+				break 				
 
 		# create ref
 		tmp = ref_tpl.format(thefile=filename, future_html=future_path)
@@ -720,7 +708,6 @@ def findTitleMd(filepath=None, text_lines=None):
 			return the_text[number - 1].strip()
 
 	return False
-
 
 # =============================
 # == methods: Args/options ====
@@ -942,34 +929,14 @@ def prepare_args(arg_dict):
 
 	return settings_final
 
-# ==================
-# === Html stuff ===
-# ==================
+# ============
+# == Misc ====
+# ============
 
-def getSplitTocBody(html):
-	"""Returns the TOC list and the rest of the html body.
-	(splitting from <body>)
+def getTOC(html):
+	"""Returns the TOC list str (splitting from <body>)	"""
 
-	toc    str 
-	body   str, whatever after toc
-	"""
-
-	if not drinkSoup:
-		text = html.split("<body>")[1]
-		text = text.split("</body>")[0]
-
-		if not '<div id="TOC">' in text:
-			return '', text.split('</div>')[1]
-
-		text = text.split('<div id="TOC">')[1]
-		text_parts = text.split('</div>')
-		body = text_parts[1]
-		toc = text_parts[0]
-		toc = toc.splitlines()
-		toc = [line for line in toc if line]
-		#toc = toc[1:-1] # remove first <ul> and last </ul>
-		toc = "".join(toc)
-	else:
+	if drinkSoup:
 		soup = BeautifulSoup(html)
 		soup = soup.body
 
@@ -977,21 +944,24 @@ def getSplitTocBody(html):
 		if toc:
 			toc = toc.extract()
 			toc = toc.ul
-			toc = str(toc)
-		else:
-			toc = ''
+			return str(toc)
 
-		header = soup.find(id='header')
-		header.extract()
+		return ''
 
-		body = str(soup.renderContents(), encoding="utf-8")
+	else:		
+		text = html.split("<body>")[1]
+		text = text.split("</body>")[0]
 
-	return toc, body
+		if not '<div id="TOC">' in text:
+			return ''
 
-
-# ============
-# == Misc ====
-# ============
+		text = text.split('<div id="TOC">')[1]
+		text_parts = text.split('</div>')
+		toc = text_parts[0]
+		toc = toc.splitlines()
+		toc = [line for line in toc if line]
+		#toc = toc[1:-1] # remove first <ul> and last </ul>
+		return "".join(toc)
 
 def orderListFromList(orderthis, fromthis, bythiscol):
 	"""Order a list, based on another by value. 
@@ -1095,9 +1065,7 @@ class Pandy(object):
 		# make base pandoc command
 		self.command.append(self.settings['PANDOC'])
 		self.command += self._cmdFromToOut('f', self.format_from)
-
-		"""
-		#self.command.append('--standalone')  # complete html --standalone
+		self.command.append('--standalone')  # complete html --standalone
 
 		# Exclude: do not treat right now or already done
 		exclude = ("FORMAT_TO", "FORMAT_FROM", "SOURCE", "OUTPUT_PATH", "MERGE",
@@ -1108,8 +1076,7 @@ class Pandy(object):
 			if key in exclude:
 				continue
 			self.command += translate_argsPandoc(key, val)
-		"""
-
+	
 		# and run!
 		self.run()
 
@@ -1157,20 +1124,6 @@ class Pandy(object):
 		merge = self.settings['MERGE']
 		book  = self.settings['BOOK']
 
-		if (not merge and not book) or merge and not book:
-			cmd_antibook = list()
-			cmd_antibook.append('--standalone')
-
-			# Add the options
-			for key, val in self.settings.items():
-				# Exclude: do not treat right now or already done
-				if key in ("FORMAT_TO", "FORMAT_FROM", "SOURCE", "OUTPUT_PATH", "MERGE",
-				          "OUTPUT_FLAT", "SLIDES", "BOOK", "HTML_VER", "PANDOC", "FILE_INDEX"):
-					continue
-				cmd_antibook += translate_argsPandoc(key, val)
-		
-			self.command += cmd_antibook
-
 		# File or files in folder / list
 		if not merge and not book:
 			print ("  Parsing files individually ... \n")
@@ -1185,8 +1138,6 @@ class Pandy(object):
 				print(" Book only for markdown, sorry")
 				exit()
 
-			# check if there is html in the output formats. 
-			# If there are more than html or none, inform
 			if "html" not in self.format_to:
 				print ("  Book only works for HTML")
 				exit()
@@ -1291,6 +1242,9 @@ class Pandy(object):
 	def _parseBook(self):
 		"""Make a book with navigation between files """
 
+		if "--toc" in self.command:
+			self.command.remove("--toc")
+
 		# if we have a navigation file, have that as the file order
 		index_file = self.settings['FILE_INDEX']
 		if index_file and os.path.exists(index_file):
@@ -1307,23 +1261,15 @@ class Pandy(object):
 			index_file = "noindex."
 
 		self.settings['FILE_INDEX'] = index_file
+
+		print (" Scanning files, hold on...")
 		self._dbInit()
-		
-		#add original command settings
-		self.command += ['-t', 'html', '--standalone']
 
-		for key, val in self.settings.items():
-			# Exclude: do not treat right now or already done
-			if key in ("FORMAT_TO", "FORMAT_FROM", "SOURCE", "OUTPUT_PATH", "MERGE", "TOC",
-			          "OUTPUT_FLAT", "SLIDES", "BOOK", "HTML_VER", "PANDOC", "FILE_INDEX"):
-				continue
-			self.command += translate_argsPandoc(key, val)
-
-		totalFiles = len(self.files)
 		index_title = self.db_files['index']['title']
 		self.command.append('--variable=project-title:' + index_title)
 
 		# process files 
+		totalFiles = len(self.files)
 		for i in range(0, totalFiles):
 			if 'index.' in self.db_files[self.files[i]]['path_input']:
 				continue
@@ -1393,7 +1339,6 @@ class Pandy(object):
 		
 		return os.path.join(self.output, cooking)
 
-
 	def _bookNavigation(self, prop_current, prop_prev, prop_next):
 		""" Makes the navigation links """
 
@@ -1447,7 +1392,7 @@ class Pandy(object):
 			self.references_list[key_name]['output'] = tmp_output
 			self.references_list[key_name]['title']  = self.db_files[the_savior]['title']
 
-			tmp = "\n\n" + ref_tpl.format(thefile=tmp_file, future_html=tmp_output)
+			tmp =  "\n\n" + ref_tpl.format(thefile=tmp_file, future_html=tmp_output)
 			tmp += "\n\n" + ref_tpl.format(thefile=tmp_file_extless, future_html=tmp_output)
 			self.references_all += tmp
 			
@@ -1485,9 +1430,9 @@ class Pandy(object):
 
 		properties['text'] = cmd_text
 
-
 		# Magic begins! 
-		cmd = list(self.command) 
+		cmd = list() 
+		cmd.append(self.settings['PANDOC'])
 		cmd.append('--toc')
 		cmd.append('--standalone')
 
@@ -1498,11 +1443,9 @@ class Pandy(object):
 		minimum = minimum.splitlines()
 		minimum = "".join(minimum)
 		
-		properties['toc'], _ = getSplitTocBody(minimum) 
+		properties['toc'] = getTOC(minimum) 
 		
 		return properties
-
-
 
 	def makeNavigationLinks(self, href_active=None, isIndex=False):
 		"""make the whole book navigation: 
@@ -1530,7 +1473,7 @@ class Pandy(object):
 
 				if href == href_active:
 					info_active = " class='active'"
-					info_toc = current['toc'].replace("\\n", "")
+					info_toc = current['toc']
 			else:
 				real_href = href
 				info_toc = current['toc'].replace('<a href="#', '<a href="' + real_href + "#")
