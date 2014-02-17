@@ -1,9 +1,9 @@
 #! python3
+# -*- coding: utf-8 -*-
 # "Wrapper" for Pandoc (python 3): pandy [file/folder] [options]
 # pylint: disable=W0312, C0103, C0326, C0303
 #                 tab instead spaces, invalid names, space operators, trailing whitespace
 #
-# -*- coding: utf-8 -*-
 # tested for pandoc 1.12.3
 
 # remember: when parsing indiv. -o is the folder to save to
@@ -18,11 +18,6 @@
 
 
 import sys
-
-if sys.version_info[0] < 3:
-	print(" Sorry, only python 3")
-	exit()
-
 import argparse
 import subprocess
 import os
@@ -1765,6 +1760,10 @@ def builtintpl(html, book_nav='', sidebar='', projindex='', pagetitle=''):
 
 
 if __name__ == '__main__':
+
+	if sys.version_info[0] < 3:
+		print(" Sorry, only python 3")
+		exit()
 
 	args = get_args()
 
