@@ -6,7 +6,113 @@
 #
 # tested for pandoc 1.12.3
 
-# remember: when parsing indiv. -o is the folder to save to
+"""
+	Basically takes a file/folder, input the markup to convert from, the output markup and run it through pandoc.
+
+	More explained:
+	From a file/folder/.list/.ini, input the "from" markup and the output format, which can be a list separated with spaces. Formats are stripped down to the most common ones:
+
+		from: docbook, html, json, latex, markdown, markdown_github, markdown_mmd, markdown_phpextra, markdown_strict, mediawiki, mw, opml, rst, textile
+		output: all the above +  asciidoc, beamer, docx (or doc), epub, epub3, fb2, html5, odt, opendocument (or opendoc), pdf, plain, rtf, slides (or slide)
+
+		 All "markdown"s can be entered as "md". So: markdown -> md; markdown_github -> md_github; etc
+
+	You can input some options of pandoc but with different names:
+
+	--from , -f           Convert from this format
+	--to, -t              Convert to this format (can be a space separated list)
+	--output, -o          Output folder
+	--self                self contained file
+	--header FILE         Header file. Included as it is (raw, verbatim)
+	--footer FILE         Footer file. Included as it is (raw, verbatim)
+	--index FILE          Custom index file for book. Can use wiki links
+	--html4               Use html4 output instead of html5
+	--merge, -m           Merge files.
+	--slides              Slides format.
+	--bib FILE            Use bibliography file
+	--css FILE            External CSS
+	--highlight           Highlight style. 
+	--highlight-no        No highlight
+	--tpl FILE            Template file.
+	--toc                 include TOC
+	--depth               TOC depth.
+	--hide                e-mail obfuscation
+	--sections            Wrap sections in <sections>, attach identifiers instead of titles
+	--pandoc PANDOC       Pandoc path. Default: pandoc
+	--data-dir FOLDER     Data directory
+	
+	If you merge and use output, you must only specify the folder. It takes the name from the parent folder/source 
+
+	As well as some of my own:
+	
+	--flat                Don't keep folder structure
+	--book, -b            Make a book with navigation (next/prev) and index
+	--no-nav, -nn         (For book) disable book navigation
+	--nav-title, -nt      (For book) use titles in book navigation
+	--no-side, -ns        (For book) Disable sidebar navigation
+	--no-side-toc, -nst   (For book) disable TOC in sidebar (keep in doc)
+	--config FILE         Use a configuration file (option=key values)
+	--tpl-pandy           Pandy's embebed template: simple and not that ugly
+
+	If you use markdown and convert to HTML, there're some goodies for you. You can have abbreviations, as PHP Markdown Extra:
+
+	Some text with an ABBR and a REF. Ignore REFERENCE and ref.
+	*[ABBR]: Abbreviation
+	*[REF]: Abbreviation Reference
+
+	admonitions with my own markup 
+
+	[class/type:optional title]
+	  * markdown
+	  * super
+	  * content
+
+	  
+	And these markdown extensions are automatically added: 'link_attributes', 'hard_line_breaks'
+
+	You can also include a tag for toc ([TOC]) to have that file with a toc instead of remembering to enter --toc. (It just adds it automatically after searching the file, no magic here)
+	
+	Book converts all files to HTML and adds navigation links. Useful to make simple documentation. 
+	
+	If you use markdown you have more goodies: create your own index (as index.md) and have "wikiLinks". Wikilinks can be in any file as [:filename][optional title] where filename can have extension or not, and if you don't include a title, it finds the file title. The order of the files in the index affect the sidebar navigation. With this you can create cooler documentation or use it as a poor's man/simple wiki.
+
+	If you don't like setting the options in the CLI, or having a script, you can create your configuration in a key=value file (like ini). Example: myconfiguration.ini contains:
+
+	PANDOC_DATA_DIR = C:\Program Files\Pandoc
+	TEMPLATE = github.html
+	HIGHLIGHT = zenburn
+
+	Specify the configuration file with --config (the extension doesn't matter, and INI headers are ignored. Don't worry) or just have a settings.ini where you run pandy.
+
+	-------------------------
+
+	extensions enabled by default (pandoc): 
+
+		headerid -> auto_identifiers; 
+		Attribute Lists -> (only headers) header_attributes; 
+		fenced_code_blocks (~~~~ & ```) and attributes (#mycode .haskell .numberLines startFrom="100")  or ```haskell; 
+		definition_lists; 
+		tables: simple_tables, multiline_tables, grid_tables, pipe_tables (like pymd); 
+		meta: pandoc_title_block, yaml_metadata_block; 
+		smart strong -> intraword_underscores; 
+		footnotes (no !DEF); 
+		inline_notes; 
+		citations
+
+	markdown variants
+
+		markdown_phpextra (PHP Markdown Extra)
+		footnotes, pipe_tables, raw_html, markdown_attribute, fenced_code_blocks, definition_lists, intraword_underscores, header_attributes, abbreviations.
+
+		markdown_github (Github-flavored Markdown)
+		pipe_tables, raw_html, tex_math_single_backslash, fenced_code_blocks, fenced_code_attributes, auto_identifiers, ascii_identifiers, backtick_code_blocks, autolink_bare_uris, intraword_underscores, strikeout, hard_line_breaks
+
+		markdown_mmd (MultiMarkdown)
+		pipe_tables raw_html, markdown_attribute, link_attributes, raw_tex, tex_math_double_backslash, intraword_underscores, mmd_title_block, footnotes, definition_lists, all_symbols_escapable, implicit_header_references, auto_identifiers, mmd_header_identifiers
+
+		markdown_strict (Markdown.pl)
+		raw_html
+"""
 
 
 # TOC wherever you want
@@ -38,11 +144,7 @@ except ImportError:
 # ==============================
 
 __version__ = "2.0"
-_MY_USAGE = ''' %(prog)s [source] [options]
- 
- [format_to] can be a list of formats; separated with spaces 
- [source]    can be a file, folder, .list or config file (.ini)
-'''
+_MY_USAGE = ''' %(prog)s [source] [options] '''
 # must replace the lists inside. This is just to have a bit of order.
 _MY_DESCRIPTION = '''
  [format_from] can be 
@@ -140,7 +242,7 @@ _DEFAULT_CONFIG = {
 	'EMAIL_HIDE': False, # e-mail obfuscation (default none, true = references)
 	'BIBLIOGRAPHY': '',
 	'HTML_VER': 'html5', # Output html5 instead of html4 (html)
-	'TOC_TAG': '[TOCME]',
+	'TOC_TAG': '[TOC]',
 	}
 
 # for wiki links mostly
@@ -1775,3 +1877,127 @@ if __name__ == '__main__':
 	
 	print ("\n  ------------------ DONE! :) ------------------------------")
 
+# History 
+
+
+# 2014-02-16:  updated tests
+#              fix references creation: only add found
+#              Add built-in template
+#              book should work with any file format. On markdown you get goodies.
+#              args: proper list for format-to option
+#                    -> in settings, use space separated list
+#              .ini now parsed with configparser. Values in .ini must not have quotes
+#              fixes
+#              clean up
+#  
+# 2014-02-15:  complete ref list added
+#              wikilinks: use a ref "database" to search (instead of files)
+#              fixes
+#  
+# 2014-02-14:  if found, use beautifulsoup
+#              new syntax for wikilinks [:file][title]
+#              fixes for merging
+#              Change whole navigation handling
+#              fix index creation (toc) when subfolders
+#              fix sidebar navigation when subfolders
+#              fix wikilinks (reference)
+#              find title in md and not in html
+#              fixes
+#              clean up
+# 
+# 2014-02-13:  Version 2.0
+#              source also accept a .ini (no force source and use only from config)
+#              option to exclude toc from sidebar navigation
+#              auto discover index
+#              Navigations in own pandoc variables
+#              check duplicates from custom index (while adding them to process)
+#              if custom index has title, use it as project title
+#              new wiki links: like md reference links but inverted -> [file][title]
+#              no required: format to/from (so can use .ini)
+#              book only for markdown
+#              list whole titles (files title and their toc) in index
+#              New way for handling files in book
+#              chg db_files format
+#              Remove toc for index
+#              fixes
+#  
+# 2014-02-12:  rewriting. fixes
+#              order files according to custom index
+#              navigation: pages titles in sidebar, next-prev
+#              sidebar -> highlight active
+#              nav_pre according to index
+#              read .ini automatically in folder where runs/source
+#              remove some methods/cleanup
+#              args take precedence over ini, which take precedence over default
+#              wikilinks without file| prefix. Must use markdown extension
+#              wikilinks in any file (not only index) (book)
+#  
+# 2014-02-11: ini fixes
+#             option to hide navigation in book
+#             modify command options
+#             
+# 2014-02-11: version 1.9 (released)
+#             only python 3
+#             fixes for book
+# 
+# 2014-01-30: prints file being converted
+#             Filter extensions for converting, only html (hardcoded)
+# 
+# 2014-01-23: add titles in sidebar for navigation
+# 
+# 2014-01-21: version 1.8.1 (released)
+#             new syntax for admonition
+# 
+# 2013-12-10: version 1.8 (released)
+#             code refactoring
+#             Less call to globals/obvious params
+#             wikiLinks: if md link has no title and it's an existing file, use the filename as title 
+#             Book: warn if no output path (defaults to current dir) and source dir is the running one
+#             minor fixes
+#             remove object creation to get file properties -> now dict
+#             code refactoring, now using a class
+#             config dict takes precedence over args
+#
+# 2013-12-09: less calls to globals
+#             changes to args
+#             + processing messages
+#             no more tmp files
+#             + more tests
+#             modified test findH1
+#             change findH1 method
+#             Fix merging
+#             merge (HTML): now can parse metadata block and have toc for full document
+#             Book: include toc ONLY on selected file
+#             book: fix having title twice in file when declared with meta-block
+#             fix titles in book: add them, if not found add the filename (no ext)
+#
+# 2013-12-08: fixing nasty bugs
+#             Fix finding H1s
+#             code fixing / rewriting, less call to globals
+#             + config file support (ini without sections)
+#
+# 2013-12-06: Clean up code
+#             default config in dictionary
+#             minor fix for admonitions
+#             add simple tests / debug
+#             Finish admonition parsing
+#
+# 2013-12-05: version 1.5 (released)
+#             rewritten and to include cool stuff
+#             + admonition parsing
+#             + Abbreviations parsing markdown -> html
+#             + warning when book also have other output formatting & html
+#             + warning custom index with wiki links only for markdown
+#             + more formats for input and output
+#             fix: formats_to: no duplicates
+#             fix: --nav only for book
+#             fix: add html5 output default, can change to 'html'
+#             fix: when merging: add <title>
+#
+# 2013-11-10: Added: merge files in directory -> end up with one output
+#
+# 2013-07-25: CHG data dir path
+#
+# 2013-07-21: version 1.0
+#             Add folder (recursive) support
+#             Add pandy script: "wrapper" for Pandoc.
