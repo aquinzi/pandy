@@ -768,8 +768,7 @@ def parse_admonitions(text):
     admon_start = False
 
     for line in text:
-
-        if line.startswith("[") and (line.endswith("]\n") or line.endswith("]")):
+        if line.count("[") == 1 and line.startswith("[") and (line.endswith("]\n") or line.endswith("]")):
             admon_start = True
 
             line = line.rstrip()
@@ -789,13 +788,13 @@ def parse_admonitions(text):
 
             continue 
 
-        if (line.startswith("\t") or line.startswith ("    ") or line == "\n") and admon_start:
+        if (line.startswith("\t") or line.startswith ("  ") or line == "\n") and admon_start:
             if not line == "\n":
                 #remove first set of whitespace
                 if line.startswith("\t"):
                 	pattern = r'^\t{1}(.+)'
                 else:
-                	pattern = r'^\s{1,4}'
+                	pattern = r'^\s{2,4}(.+)'
                 
                 line = re.sub(pattern, '\\1', line)
 
@@ -873,11 +872,11 @@ def parse_wikilinks(text, list_files=None, this_references=None):
 	"""
 
 	# prefere this_references 
-	if list_files is not None and this_references is not None:
+	if list_files and this_references:
 		list_files = None 
 
 	extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
-	links = extractMdLinks(text, extension=extensions, referencestyle=True)
+	links = extractMdLinks(text, extension=extensions, style='wiki')
 
 	references = list()
 	ref_tpl    = "[{thefile}]: {future_html}"
@@ -933,9 +932,9 @@ def parse_wikilinks(text, list_files=None, this_references=None):
 
 	newtext = newtext.split("<<<<SPLITMEOVERHERE>>>>")
 
-	return newtext, references	
+	return newtext, references
 
-def extractMdLinks(text, extension="md", referencestyle=False):
+def extractMdLinks(text, extension="md", style='inline'):
 	"""Extract markdown links in text with extension. 
 	:text list 
 	:extension the allowed extension
@@ -943,23 +942,35 @@ def extractMdLinks(text, extension="md", referencestyle=False):
 	:return a nested list. 
 	             normal: holder(title, link)
 	             reference: holder(title, id_link)
+	:style      style of links. Options: inline | reference | wiki | all or both
 	"""
 
 	list_links = list()
 
 	expr_normal    = "\[(.+?)?\]\((.+?\.(" + extension + "))\)"
-	expr_reference = "\[:(.+?[\.(" + extension + ")]?)\]\[(|.+?)\]"
+	expr_wiki = "\[:(.+?[\.(" + extension + ")]?)\]\[(|.+?)\]"
+	expr_reference = "\[(.+?[\.(" + extension + ")]?)\]\[(|.+?)\]"
+	# all = inline + reference
+	expr_all = "\[\:?(.+?[\.(" + extension + ")]?)\](?:\[(|.+?)\]|\((.+?[\.(" + extension + ")]?)\))"
 
-	if referencestyle:
+	if style == "reference":
 		expr = r'' + expr_reference
-	else:
+	elif style == "wiki":
+		expr = r'' + expr_wiki
+	elif style == "inline":
 		expr = r'' + expr_normal
+	elif style in ('all', 'both'):
+		expr = r'' + expr_all
 
 	for line in text:
 		matches = re.findall(expr, line)
 		for m in matches:
 			title = m[0].strip()
-			link  = m[1].strip()
+			if not style == 'all':
+				link  = m[1].strip()
+			else:
+				link  = m[2].strip()
+
 			if [title, link] not in list_links:
 				list_links.append([title, link])
 
@@ -1245,7 +1256,7 @@ def getTOC(html):
 		#toc = toc[1:-1] # remove first <ul> and last </ul>
 		return "".join(toc)
 
-def orderListFromList(orderthis, fromthis, bythiscol):
+def orderListFromList(orderthis, fromthis, bythiscol=None):
 	"""Order a list, based on another by value. 
 
 	:orderthis    list to be ordered 
@@ -1257,8 +1268,12 @@ def orderListFromList(orderthis, fromthis, bythiscol):
 
 	for new_order in fromthis:
 		for item in orderthis:
+			checkthis = new_order
+			if bythiscol is not None:
+				checkthis = new_order[bythiscol]
+
 			#we trust the user that will be no files with same name
-			if new_order[bythiscol] in item:
+			if checkthis in item:
 				tmp_list.append(item)
 				break 
 
@@ -1313,6 +1328,34 @@ def msg(message, indent=2):
 	"""
 
 	print(" "*indent + message)
+
+def builtintpl(html, book_nav='', sidebar='', projindex='', pagetitle=''):
+	"""Custom/embebed template; using pandoc's default"""
+
+	#plain splitting
+
+	head_split = html.split("</head>")
+	head = head_split[0]
+	body = head_split[1]
+
+	head_final = head + '<style type="text/css">' + HTML_CSS +  "</style>" + "</head>"
+
+	bookbar = HTML_BOOKBAR.format(projectindex=projindex, pagetitle=pagetitle, 
+		           book_navigation=book_nav)
+
+	code_before = HTML_BEFORE.format(bookbar=bookbar, side_navigation=sidebar)
+	code_after = HTML_AFTER.format(bookbar=bookbar)
+
+	body_split = body.split('<body>')
+	body = body_split[1]
+
+	body_final = '<body>' + code_before + body 
+	body_split = body_final.split('</body>')
+	body = body_split[0]
+	body_final = body + code_after + '</body>' + body_split[1]
+
+	return head_final + body_final
+
 
 # ==============
 # == Pandy! ====
@@ -1533,20 +1576,10 @@ class Pandy(object):
 		if "--toc" in self.command:
 			self.command.remove("--toc")
 
+		index_file = "noindex."
 		# if we have a navigation file, have that as the file order (only markdown)
-		index_file = self.settings['FILE_INDEX']
-		if index_file and os.path.exists(index_file) and self.format_from == 'markdown':
-			index_text = cmd_open_file(index_file).splitlines()
-			files_order = extractMdLinks(index_text, extension="md")
-			self.files = orderListFromList(self.files, files_order, 1)
-			
-			#del dups 
-			tmp = list()
-			[tmp.append(h) for h in self.files if h not in tmp]
-
-			self.files = tmp
-		else:
-			index_file = "noindex."
+		if self.settings['FILE_INDEX'] and os.path.exists(self.settings['FILE_INDEX']) and self.format_from == 'markdown':
+			index_file = self.settings['FILE_INDEX']
 
 		self.settings['FILE_INDEX'] = index_file
 
@@ -1571,6 +1604,7 @@ class Pandy(object):
 
 			current = self.db_files[self.files[i]]
 			msg("Processing: " + path_getFilename(current['path_input']))
+			current['text'] = self._parseBody(current['text'])
 
 			prev = self.db_files[self.files[i - 1]]
 
@@ -1681,9 +1715,8 @@ class Pandy(object):
 		"""Init dbfiles with properties """
 
 		self.db_files['index'] = {
-			'title': "Index",
+			'title': "Index", 'path_input' :self.settings['FILE_INDEX'],
 			'real_output' : os.path.join(self.output, "index.html"),
-			'path_input' :self.settings['FILE_INDEX'],
 		     }
 
 		ref_tpl = "[{thefile}]: {future_html}"
@@ -1712,8 +1745,39 @@ class Pandy(object):
 		if os.path.exists(self.settings['FILE_INDEX']):
 			props = self._fileMetadata(self.settings['FILE_INDEX'])
 			self.db_files['index'].update(props)
+			self._fileOrderByIndex()
+			self.db_files['index']['text'] = self._parseBody(self.db_files['index']['text'])
 		else:
 			self.db_files['index']['text'] = self.makeNavigationLinks(isIndex=True)
+
+
+	def _fileOrderByIndex(self):
+		"""Order list of files from custom index"""
+
+		index_text = self.db_files['index']['text']
+
+		extensions = "|".join(ACCEPTED_MD_EXTENSIONS)
+
+		# gather internal and wikilinks (returned sub list items are different in position)
+		links_internal = extractMdLinks(index_text, extension=extensions, style='inline') 
+		links_wiki     = extractMdLinks(index_text, extension=extensions, style='wiki') 
+		
+		# join both list, getting only filename
+		tmp_links = list()
+
+		for wiki in links_wiki:
+			tmp_links.append(wiki[0])
+
+		for internal in links_internal:
+			tmp_links.append(internal[1])
+
+		# order, delete duplicates and overwrite original listing
+		self.files = orderListFromList(self.files, tmp_links)
+
+		tmp = list()
+		[tmp.append(h) for h in self.files if h not in tmp]
+
+		self.files = tmp		
 
 	def _fileMetadata(self, filepath):
 		"""for book. Get file properties: output path, input path, md title """
@@ -1728,29 +1792,24 @@ class Pandy(object):
 		properties['index_url']   = path_relative_to(
 				            os.path.join(self.output, 'index.html'), properties['real_output'])
 
-		with cmd_open_write(filepath, 'r') as tmp:
-			cmd_text = tmp.readlines()
-
-		if not self.format_from == 'markdown':
-			cmd_text = "".join(cmd_text)
-		else:
-			tmp = findTitleMd(filepath)
-			if tmp:
-				properties['title'] = tmp
-
-			cmd_text, _ = if_special_elements(cmd_text, self.settings['TOC_TAG'])
-			cmd_text, _ = parse_wikilinks(cmd_text, this_references=self.references_list)
-			cmd_text = "".join(cmd_text)
-			cmd_text += "\n\n" + self.references_all
-
-		properties['text'] = cmd_text
-
 		# Magic begins! extract TOC
 		cmd = list() 
 		cmd.append(self.settings['PANDOC'])
 		cmd.append('--toc')
 		cmd.append('--standalone')
 
+		with cmd_open_write(filepath, 'r') as tmp:
+			cmd_text = tmp.readlines()
+
+		# save for later
+		properties['text'] = cmd_text
+
+		if self.format_from == 'markdown':
+			tmp = findTitleMd(text_lines=cmd_text)
+			if tmp:
+				properties['title'] = tmp
+
+		cmd_text = "".join(cmd_text)
 		minimum = run_subprocess(cmd, True, cmd_text)
 		minimum = str(minimum, encoding='utf8')
 
@@ -1761,6 +1820,21 @@ class Pandy(object):
 		properties['toc'] = getTOC(minimum) 
 		
 		return properties
+
+	def _parseBody(self, text_lines):
+		"""Parse properly the text """
+
+		cmd_text = text_lines
+
+		if not self.format_from == 'markdown':
+			cmd_text = "".join(cmd_text)
+		else:
+			cmd_text, _ = if_special_elements(cmd_text, self.settings['TOC_TAG'])
+			cmd_text, _ = parse_wikilinks(cmd_text, this_references=self.references_list)
+			cmd_text = "".join(cmd_text)
+			cmd_text += "\n\n" + self.references_all
+
+		return cmd_text
 
 	def makeNavigationLinks(self, href_active=None, isIndex=False):
 		"""make the whole book navigation: 
@@ -1802,32 +1876,6 @@ class Pandy(object):
 		return "<ul>" + final + "</ul>"
 
 
-def builtintpl(html, book_nav='', sidebar='', projindex='', pagetitle=''):
-	"""Custom/embebed template; using pandoc's default"""
-
-	#plain splitting
-
-	head_split = html.split("</head>")
-	head = head_split[0]
-	body = head_split[1]
-
-	head_final = head + '<style type="text/css">' + HTML_CSS +  "</style>" + "</head>"
-
-	bookbar = HTML_BOOKBAR.format(projectindex=projindex, pagetitle=pagetitle, 
-		           book_navigation=book_nav)
-
-	code_before = HTML_BEFORE.format(bookbar=bookbar, side_navigation=sidebar)
-	code_after = HTML_AFTER.format(bookbar=bookbar)
-
-	body_split = body.split('<body>')
-	body = body_split[1]
-
-	body_final = '<body>' + code_before + body 
-	body_split = body_final.split('</body>')
-	body = body_split[0]
-	body_final = body + code_after + '</body>' + body_split[1]
-
-	return head_final + body_final
 
 
 if __name__ == '__main__':
@@ -1848,6 +1896,7 @@ if __name__ == '__main__':
 
 # History 
 
+# 2014-02-18:  wikilinks fixes
 # 2014-02-16:  Version 2.0 (released)
 #              updated tests
 #              fix references creation: only add found
