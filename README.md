@@ -122,7 +122,24 @@ History
 
 ### Version 2.0
 
-in the making, hold on
+Total rewrite! Many fixes and (internal) cleanup/improvement. Also:
+
+  * new wiki links: like markdown reference links but inverted -> ``[:file][title]``
+  * wikilinks in any file (not only index) (book)
+  * auto discover index
+  * if custom index has title, use it as project title
+  * list all titles (and toc) in index
+  * order files according to custom index
+  * navigation: pages titles in sidebar, next-prev
+  * option to hide navigation in book
+  * option to exclude toc from sidebar navigation
+  * Navigations in pandoc variables
+  * built-in template (book)
+  * modify command options
+  * read .ini automatically in folder where runs/source
+  * args take precedence over ini, which take precedence over default
+  * change .ini format. See examples (basically remove quotes, lists are space separated)
+
 
 ### Version 1.9
 

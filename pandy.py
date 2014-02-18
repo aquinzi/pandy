@@ -1848,8 +1848,8 @@ if __name__ == '__main__':
 
 # History 
 
-
-# 2014-02-16:  updated tests
+# 2014-02-16:  Version 2.0 (released)
+#              updated tests
 #              fix references creation: only add found
 #              Add built-in template
 #              book should work with any file format. On markdown you get goodies.
@@ -1874,8 +1874,7 @@ if __name__ == '__main__':
 #              fixes
 #              clean up
 # 
-# 2014-02-13:  Version 2.0
-#              source also accept a .ini (no force source and use only from config)
+# 2014-02-13:  source also accept a .ini (no force source and use only from config)
 #              option to exclude toc from sidebar navigation
 #              auto discover index
 #              Navigations in own pandoc variables
@@ -1884,7 +1883,7 @@ if __name__ == '__main__':
 #              new wiki links: like md reference links but inverted -> [file][title]
 #              no required: format to/from (so can use .ini)
 #              book only for markdown
-#              list whole titles (files title and their toc) in index
+#              list all titles (and toc) in index
 #              New way for handling files in book
 #              chg db_files format
 #              Remove toc for index
