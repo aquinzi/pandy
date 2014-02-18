@@ -1,9 +1,7 @@
 #! python3
 # -*- coding: utf-8 -*-
+
 # "Wrapper" for Pandoc (python 3): pandy [file/folder] [options]
-# pylint: disable=W0312, C0103, C0326, C0303
-#                 tab instead spaces, invalid names, space operators, trailing whitespace
-#
 # tested for pandoc 1.12.3
 
 """
@@ -16,6 +14,8 @@
 		output: all the above +  asciidoc, beamer, docx (or doc), epub, epub3, fb2, html5, odt, opendocument (or opendoc), pdf, plain, rtf, slides (or slide)
 
 		 All "markdown"s can be entered as "md". So: markdown -> md; markdown_github -> md_github; etc
+		 
+		 And these markdown extensions are automatically added: 'link_attributes', 'hard_line_breaks'
 
 	You can input some options of pandoc but with different names:
 
@@ -52,7 +52,7 @@
 	--no-side, -ns        (For book) Disable sidebar navigation
 	--no-side-toc, -nst   (For book) disable TOC in sidebar (keep in doc)
 	--config FILE         Use a configuration file (option=key values)
-	--tpl-pandy           Pandy's embebed template: simple and not that ugly
+	--tpl-pandy           (For book) Pandy's embebed template: simple and not so ugly
 
 	If you use markdown and convert to HTML, there're some goodies for you. You can have abbreviations, as PHP Markdown Extra:
 
@@ -67,15 +67,21 @@
 	  * super
 	  * content
 
+    The "class/type" would be something like "information", "danger", "tip", "hint", "hungry", "duck", "yay" ...
 	  
-	And these markdown extensions are automatically added: 'link_attributes', 'hard_line_breaks'
-
 	You can also include a tag for toc ([TOC]) to have that file with a toc instead of remembering to enter --toc. (It just adds it automatically after searching the file, no magic here)
 	
 	Book converts all files to HTML and adds navigation links. Useful to make simple documentation. 
 	
 	If you use markdown you have more goodies: create your own index (as index.md) and have "wikiLinks". Wikilinks can be in any file as [:filename][optional title] where filename can have extension or not, and if you don't include a title, it finds the file title. The order of the files in the index affect the sidebar navigation. With this you can create cooler documentation or use it as a poor's man/simple wiki.
 
+	If you wish to create your own template for book, pandy adds some variables for you to include: 
+
+	  * ``side_navigation`` the sidebar navigation 
+	  * ``book_navigation`` book navigation (previous/index/next)
+	  * ``project-index`` link to index. Useful if you have subfolders 
+	  * ``project-title`` Index title. Useful if you create your own index with a title
+	
 	If you don't like setting the options in the CLI, or having a script, you can create your configuration in a key=value file (like ini). Example: myconfiguration.ini contains:
 
 	PANDOC_DATA_DIR = C:\Program Files\Pandoc
@@ -84,44 +90,7 @@
 
 	Specify the configuration file with --config (the extension doesn't matter, and INI headers are ignored. Don't worry) or just have a settings.ini where you run pandy.
 
-	-------------------------
-
-	extensions enabled by default (pandoc): 
-
-		headerid -> auto_identifiers; 
-		Attribute Lists -> (only headers) header_attributes; 
-		fenced_code_blocks (~~~~ & ```) and attributes (#mycode .haskell .numberLines startFrom="100")  or ```haskell; 
-		definition_lists; 
-		tables: simple_tables, multiline_tables, grid_tables, pipe_tables (like pymd); 
-		meta: pandoc_title_block, yaml_metadata_block; 
-		smart strong -> intraword_underscores; 
-		footnotes (no !DEF); 
-		inline_notes; 
-		citations
-
-	markdown variants
-
-		markdown_phpextra (PHP Markdown Extra)
-		footnotes, pipe_tables, raw_html, markdown_attribute, fenced_code_blocks, definition_lists, intraword_underscores, header_attributes, abbreviations.
-
-		markdown_github (Github-flavored Markdown)
-		pipe_tables, raw_html, tex_math_single_backslash, fenced_code_blocks, fenced_code_attributes, auto_identifiers, ascii_identifiers, backtick_code_blocks, autolink_bare_uris, intraword_underscores, strikeout, hard_line_breaks
-
-		markdown_mmd (MultiMarkdown)
-		pipe_tables raw_html, markdown_attribute, link_attributes, raw_tex, tex_math_double_backslash, intraword_underscores, mmd_title_block, footnotes, definition_lists, all_symbols_escapable, implicit_header_references, auto_identifiers, mmd_header_identifiers
-
-		markdown_strict (Markdown.pl)
-		raw_html
 """
-
-
-# TOC wherever you want
-# prob split stuff instead of having one big file
-# Enable/disble extensions from cli
-# custom css/js: --include-in-header
-#
-# wikilinks: fix when in sub and using [:file] to refer to one in root
-
 
 import sys
 import argparse

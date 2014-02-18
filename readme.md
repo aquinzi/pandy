@@ -3,37 +3,37 @@ pandy
 
 Basically takes a file/folder, input the markup to convert from, the output markup and runs it through pandoc.
 
+Features
+----------
+
+  * A bit easier syntax around pandoc commands and some added by me
+  * Output folder keeping or not the folder structure
+  * Source can be a file, a folder, .list containing file paths or .ini
+  * Formats: some of them have abbreviations (see below)
+  * Output format: you can have more than one! just separate them with spaces
+  * You can create a nice book (html, just adds navigation links between files) like a wiki or for documentation. If you don't like/want "Next-Prev" navigation links, you can use the file's title. It creates a nice simple index file or you can include your own.
+  * Use a config file: so you don't have to remember all the arguments or write a "wrapper" script for a "wrapper" script :)
+  * ``[TOC]`` support. That means that a file that has it, will have a TOC. No more separating files: these ones with TOC, these ones without, and finally place them in the same folder.
+  * If you use markdown and convert to HTML there are some goodies for you! abbreviations (real abbreviations; they are parsed and not ignored as pandoc does), admonitions and "WikiLinks"
+  * No-so-ugly default template for book :)
+
+  
 Usage
 --------
 
 To use the script, just call it with something like:
 
-	pandy source format_from format/s_to [other options]
-
-Explanation somewhere below.
-
-Features
-----------
-
-  * A bit easier syntax around pandoc commands (I can't never remember them)
-  * Output folder keeping or not the folder structure
-  * Source can be a file, a folder or a .list containing file paths
-  * Formats: some of them have abbreviations (see below)
-  * Output format: you can have more than one! just separate them with spaces
-  * You can create a nice book (html, just adds navigation links between files). If you don't like/want "Next-Prev" navigation links, you can use the file's title. It creates a nice simple index file or you can include your own.
-  * Use a config file: so you don't have to remember all the arguments or write a "wrapper" script for a "wrapper" script :)
-  * ``[TOCME]`` support. That means that a file that has it, will have a TOC. No more separating files: these ones with TOC, these ones without, and finally place them in the same folder.
-  * If you use markdown and convert to HTML there are some goodies for you! abbreviations (real abbreviations, like that they are parsed and not ignored as pandoc does) and admonitions.
-  * "WikiLinks" for your custom index file!
+	pandy source [options]
 
 
+	
 Explanation
 ----------
 
-From a file/folder/.list, input the "from" markup and the output format, which can be a list separated with spaces. Formats are stripped down to the most common ones:
+From a file/folder/.list/.ini, input the "from" markup and the output format, which can be a list separated with spaces. Formats are stripped down to the most common ones:
 
   * from: docbook, html, json, latex, markdown, markdown\_github, markdown\_mmd, markdown\_phpextra, markdown\_strict, mediawiki (or mw), opml, rst, textile
-  * output: all the above +  asciidoc, beamer, docx (or doc), epub, epub3, fb2, html5, odt, opendocument (or opendoc), pdf, plain, rtf, slides (or slide)
+  * output: all the above + asciidoc, beamer, docx (or doc), epub, epub3, fb2, html5, odt, opendocument (or opendoc), pdf, plain, rtf, slides (or slide)
 
 Notes: 
 
@@ -43,6 +43,8 @@ Notes:
 
 You can input some options of pandoc but with different names:
 
+	--from , -f           Convert from this format
+	--to, -t              Convert to this format (can be a space separated list)
 	--output, -o          Output folder
 	--self                self contained file
 	--header FILE         Header file. Included as it is (raw, verbatim)
@@ -56,21 +58,26 @@ You can input some options of pandoc but with different names:
 	--highlight           Highlight style. 
 	--highlight-no        No highlight
 	--tpl FILE            Template file.
-	--toc, -t             include TOC
+	--toc                 include TOC
 	--depth               TOC depth.
 	--hide                e-mail obfuscation
 	--sections            Wrap sections in <sections>, attach identifiers instead of titles
 	--pandoc PANDOC       Pandoc path. Default: pandoc
 	--data-dir FOLDER     Data directory
 
+If you merge and use output, you must only specify the folder. It takes the name from the parent folder/source 
+	
 As well as some of my own:
 
 	--flat                Don't keep folder structure
 	--book, -b            Make a book with navigation (next/prev) and index
-	--nav, -n             (For book) use titles in navigation
-  --navside             (For book) Make a sidebar with titles
-  --config FILE         Use a configuration file (option=key values)
-
+	--no-nav, -nn         (For book) disable book navigation
+	--nav-title, -nt      (For book) use titles in book navigation
+	--no-side, -ns        (For book) Disable sidebar navigation
+	--no-side-toc, -nst   (For book) disable TOC in sidebar (keep in doc)
+	--config FILE         Use a configuration file (option=key values)
+	--tpl-pandy           (For book) Pandy's embebed template: simple and not so ugly
+	
 If you use markdown and convert to HTML, there're some goodies for you. You can have abbreviations, as PHP Markdown Extra:
 
 	Some text with an ABBR and a REF. Ignore REFERENCE and ref.
@@ -87,23 +94,35 @@ And admonitions with this markup:
 
 The "class/type" would be something like "information", "danger", "tip", "hint", "hungry", "duck", "yay" ...
 
-You can also include a tag for TOC (``[TOCME]``) to have that file with a TOC instead of remembering to enter --toc or separating files in two groups and then placing them together. (It just adds it automatically after searching the file, no magic here)
+You can also include a tag for toc ([TOC]) to have that file with a toc instead of remembering to enter ``--toc``. (It just adds it automatically after searching the file, no magic here)
 
-For book: you can create your own index and have "wikiLinks" as ``[](file|nice_file.txt)``. It will render as ``[title of file](nice_file.html)``
+Book converts all files to HTML and adds navigation links. Useful to make simple documentation. 
 
-If you don't like setting the options in the CLI, or having a script which calls pandy with the arguments you prefer, you can create your configuration in a key=value file (like ini). Example: 
+If you use markdown you have more goodies: create your own index (as ``index.md``) and have "wikiLinks". Wikilinks can be in any file as ``[:filename][optional title]`` where filename can have extension or not, and if you don't include a title, it finds the file title. The order of the files in the index affect the sidebar navigation. With this you can create cooler documentation or use it as a poor's man/simple wiki.
 
-	PANDOC_DATA_DIR = "C:\Program Files\Pandoc"
-	TEMPLATE = 'github.html'
-	HIGHLIGHT= 'zenburn'
-	FORMATS_TO = [html, pdf]
-	NAV = True
+If you wish to create your own template for book, pandy adds some variables for you to include: 
 
-Specify the configuration file with ``--config`` (the extension doesn't matter, INI headers are ignored as well as comments (line or inline). Don't worry)
+  * ``side_navigation`` the sidebar navigation 
+  * ``book_navigation`` book navigation (previous/index/next)
+  * ``project-index`` link to index. Useful if you have subfolders 
+  * ``project-title`` Index title. Useful if you create your own index with a title
+
+If you don't like setting the options in the CLI, or having a script, you can create your configuration in a key=value file (like ini). Example: myconfiguration.ini contains:
+
+	PANDOC_DATA_DIR = C:\Program Files\Pandoc
+	TEMPLATE = github.html
+	HIGHLIGHT = zenburn
+	TOC = False
+
+Specify the configuration file with ``--config`` (the extension doesn't matter, INI headers are ignored as well as comments. Don't worry) or just have a ``settings.ini`` where you run pandy.
 
 
 History
 -----------
+
+### Version 2.0
+
+in the making, hold on
 
 ### Version 1.9
 
