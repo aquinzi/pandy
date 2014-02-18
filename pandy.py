@@ -1599,6 +1599,7 @@ class Pandy(object):
 		# process files 
 		totalFiles = len(self.files)
 		for i in range(0, totalFiles):
+
 			if 'index.' in self.db_files[self.files[i]]['path_input']:
 				continue
 
@@ -1607,8 +1608,7 @@ class Pandy(object):
 			current['text'] = self._parseBody(current['text'])
 
 			prev = self.db_files[self.files[i - 1]]
-
-			if 'index.' in prev['path_input']:
+			if 'index.' in prev['path_input'] or i == 0:
 				prev = dict()
 				prev['real_output'] = ""
 				prev['title']       = ""
