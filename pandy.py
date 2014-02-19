@@ -360,10 +360,10 @@ HTML_CSS = """
     .error p.admonition-title, .caution p.admonition-title, .danger p.admonition-title
     {background-color: #b04040; border-color: #900000;}
 
-    .admonition.hint, .admonition.download 
+    .admonition.hint
     {background-color: #ECFAE3;  border-color: #609060;}
 
-    .hint p.admonition-title, .download p.admonition-title 
+    .hint p.admonition-title
     {background-color: #70A070; border-color: #609060;}
 
     .admonition.note, .admonition.tip, .admonition.warning
