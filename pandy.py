@@ -112,7 +112,7 @@ except ImportError:
 # ==== info & pandoc config ====
 # ==============================
 
-__version__ = "2.0"
+__version__ = "2.0.1"
 _MY_USAGE = ''' %(prog)s [source] [options] '''
 # must replace the lists inside. This is just to have a bit of order.
 _MY_DESCRIPTION = '''
@@ -290,7 +290,7 @@ HTML_CSS = """
     table { 
         padding: 0; margin: 0 auto 2em auto;
         border-spacing: 0; border-collapse: collapse;
-        /*width: 70%;*/
+        min-width: 50%;
         border: 1px solid;
     }
     th, caption {color: #444; font-weight: bold;text-align: center;}
