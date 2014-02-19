@@ -767,7 +767,6 @@ def parse_admonitions(text):
 
 	new_test = list()
 	admon_start = False
-	find_admon = r"^\[(.+?)(:.+?)?\]$"
 
 	for line in text:
 		tmp_line = line.rstrip()
@@ -795,11 +794,9 @@ def parse_admonitions(text):
 			if tmp_line:
 				#remove first set of whitespace
 				if tmp_line.startswith("\t"):
-					pattern = r'^\t{1}(.+)'
+					tmp_line = tmp_line.replace("\t", "", 1)
 				else:
-					pattern = r'^\s{2,4}(.+)'
-                
-				tmp_line = re.sub(pattern, '\\1', tmp_line)
+					tmp_line = re.sub(r'^\s{2,4}(.+)', '\\1', tmp_line)
 			else:
 				tmp_line = "\n"
 
