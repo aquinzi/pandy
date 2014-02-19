@@ -746,69 +746,73 @@ def parse_abbreviations(text):
 	return newtext
 
 def parse_admonitions(text):
-    """ Find and parse my admonitions. 
-    Input text: as list (just after open)
-    returns parsed text as list
+	""" Find and parse my admonitions. 
+	Input text: as list (just after open)
+	returns parsed text as list
 
-    Syntax:
-    [class/type:optional title]
+	Syntax:
+	[class/type:optional title]
       * markdown
       * super
       * content
     
-    would be translated as div:
-    <div class="admonition class/type">
-    <p class="admonition-title"> Optional title </p>
+	would be translated as div:
+	<div class="admonition class/type">
+	<p class="admonition-title"> Optional title </p>
       * markdown
       * super
       * content
-    </div>
+	</div>
     """
 
-    new_test = list()
-    admon_start = False
+	new_test = list()
+	admon_start = False
+	find_admon = r"^\[(.+?)(:.+?)?\]$"
 
-    for line in text:
-        if line.count("[") == 1 and line.startswith("[") and (line.endswith("]\n") or line.endswith("]")):
-            admon_start = True
+	for line in text:
+		tmp_line = line.rstrip()
 
-            line = line.rstrip()
-            line = line[1:len(line)-1]
+		if tmp_line.count("[") == 1 and tmp_line.startswith("[") and tmp_line.endswith("]"):
+			admon_start = True
+
+			tmp_line = tmp_line[1:len(tmp_line)-1]
             
-            if ":" in line:
-                admon_type, admon_title = line.split(':')
-            else:
-                admon_type = line
-                admon_title = None
+			if ":" in tmp_line:
+				admon_type, admon_title = tmp_line.split(':')
+			else:
+				admon_type = tmp_line
+				admon_title = None
 
-            new_str = '<div class="admonition ' + admon_type + '">'
-            new_test.append(new_str)
+			new_str = '<div class="admonition ' + admon_type + '">'
+			new_test.append(new_str)
 
-            if admon_title:
-                new_test.append('<p class="admonition-title">' + admon_title + '</p>')
+			if admon_title:
+				new_test.append('<p class="admonition-title">' + admon_title + '</p>')
 
-            continue 
+			continue 
 
-        if (line.startswith("\t") or line.startswith ("  ") or line == "\n") and admon_start:
-            if not line == "\n":
-                #remove first set of whitespace
-                if line.startswith("\t"):
-                	pattern = r'^\t{1}(.+)'
-                else:
-                	pattern = r'^\s{2,4}(.+)'
+		if (tmp_line.startswith("\t") or tmp_line.startswith ("  ") or not tmp_line) and admon_start:
+			if tmp_line:
+				#remove first set of whitespace
+				if tmp_line.startswith("\t"):
+					pattern = r'^\t{1}(.+)'
+				else:
+					pattern = r'^\s{2,4}(.+)'
                 
-                line = re.sub(pattern, '\\1', line)
+				tmp_line = re.sub(pattern, '\\1', tmp_line)
+			else:
+				tmp_line = "\n"
 
-            new_test.append(line)
+			new_test.append(tmp_line)
 
-        else:
-            if admon_start:
-                new_test.append("</div>")
+		else:
+			if admon_start:
+				new_test.append("</div>")
 
-            new_test.append(line)
-            admon_start = False
+			new_test.append(line)
+			admon_start = False
 
-    return new_test
+	return new_test
 
 def find_TOCinFile(text, placeholder, replace_with='<!-- TOCatized -->'):
 	""" automatically check if text (as list) has the TOC tag. Replaces 
