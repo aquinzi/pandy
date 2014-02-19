@@ -165,6 +165,7 @@ _COMMANDS_COMPLETE = {
 	'HIGHLIGHT'    : "--highlight-style=",
 	'FILE_HEADER'  : "--include-before-body=",
 	'FILE_FOOTER'  : "--include-after-body=",
+	'CSL'          : "--csl="
 	}
 
 EXTENSIONS_EXTRA  = ('link_attributes', 'hard_line_breaks')
@@ -289,14 +290,14 @@ HTML_CSS = """
     table { 
         padding: 0; margin: 0 auto 2em auto;
         border-spacing: 0; border-collapse: collapse;
-        width: 70%;
+        /*width: 70%;*/
         border: 1px solid;
     }
     th, caption {color: #444; font-weight: bold;text-align: center;}
     td, th {padding: .6em .4em; vertical-align: top; border: 1px solid #779; }
     th, tfoot td {border: 1px solid #361; background: #e0e5cf; }
-    tr { background:#f5f5f5 }
-    tr:hover, tr.odd:hover { background: #cfe0e5 }
+    /*tr { background:#f5f5f5 }*/
+    tr { background: #cfe0e5 }
     tr.odd { background: #e5cfe0 }
     tr.odd td, tr.odd th { border-color: #977; }
 
@@ -1053,6 +1054,7 @@ def get_args():
 		    help="Slides format. Options: " + ", ".join(_SLIDES_OPTIONS) + ". Default: %(default)s",  
 		    default=_DEFAULT_CONFIG['SLIDES'])
 	option_file.add_argument("--bib", help="Use bibliography file", metavar="FILE")
+	option_file.add_argument("--csl", help="CSL file", metavar="FILE")
 
 	exclusive = option_file.add_mutually_exclusive_group()
 	exclusive.add_argument("--merge", "-m", action="store_true", help="Merge files")
@@ -1138,6 +1140,7 @@ def get_args():
 		'merge': 'MERGE',
 		'book': 'BOOK',
 		'highlight_no': 'HIGHLIGHT_NO',
+		'csl': "CSL",
 		}
 
 	settings_args = dict()
