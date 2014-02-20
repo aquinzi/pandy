@@ -309,7 +309,9 @@ HTML_CSS = """
     }
 
     pre  { margin: 5px 0 0; padding: 6px 5px; white-space: pre; overflow: auto; }
-    code { margin: 0 2px; padding: 2px 5px; white-space: nowrap; }
+    code { margin: 0 2px; padding: 2px 5px; /*white-space: nowrap;*/ }
+
+    pre code {border: none }
 
     #TOC    { margin-top: 30px; background-color: #e5efdf; border: 1px solid #cedec4;}
     #TOC a  { margin: 0 15px !important; }
