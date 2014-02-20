@@ -226,7 +226,7 @@ HTML_CSS = """
         padding: 0px 25px; 
         margin: -1px auto;
         font: 14px helvetica, "Segoe UI", arial, freesans, sans-serif; 
-        line-height: 1.6em;
+        line-height: 1.8em;
         color: #3A3A3A;
         background-color: #f2f2f2;
     }
