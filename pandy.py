@@ -774,6 +774,10 @@ def parse_admonitions(text):
 		tmp_line = line.rstrip()
 
 		if tmp_line.count("[") == 1 and tmp_line.startswith("[") and tmp_line.endswith("]"):
+			if admon_start:
+				# close previous
+				new_test.append("</div>")
+
 			admon_start = True
 
 			tmp_line = tmp_line[1:len(tmp_line)-1]
