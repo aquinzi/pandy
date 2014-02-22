@@ -112,7 +112,7 @@ except ImportError:
 # ==== info & pandoc config ====
 # ==============================
 
-__version__ = "2.0"
+__version__ = "2.0.1"
 _MY_USAGE = ''' %(prog)s [source] [options] '''
 # must replace the lists inside. This is just to have a bit of order.
 _MY_DESCRIPTION = '''
@@ -165,6 +165,7 @@ _COMMANDS_COMPLETE = {
 	'HIGHLIGHT'    : "--highlight-style=",
 	'FILE_HEADER'  : "--include-before-body=",
 	'FILE_FOOTER'  : "--include-after-body=",
+	'CSL'          : "--csl="
 	}
 
 EXTENSIONS_EXTRA  = ('link_attributes', 'hard_line_breaks')
@@ -225,7 +226,7 @@ HTML_CSS = """
         padding: 0px 25px; 
         margin: -1px auto;
         font: 14px helvetica, "Segoe UI", arial, freesans, sans-serif; 
-        line-height: 1.6em;
+        line-height: 1.8em;
         color: #3A3A3A;
         background-color: #f2f2f2;
     }
@@ -289,14 +290,14 @@ HTML_CSS = """
     table { 
         padding: 0; margin: 0 auto 2em auto;
         border-spacing: 0; border-collapse: collapse;
-        width: 70%;
+        min-width: 50%;
         border: 1px solid;
     }
     th, caption {color: #444; font-weight: bold;text-align: center;}
     td, th {padding: .6em .4em; vertical-align: top; border: 1px solid #779; }
     th, tfoot td {border: 1px solid #361; background: #e0e5cf; }
-    tr { background:#f5f5f5 }
-    tr:hover, tr.odd:hover { background: #cfe0e5 }
+    /*tr { background:#f5f5f5 }*/
+    tr { background: #cfe0e5 }
     tr.odd { background: #e5cfe0 }
     tr.odd td, tr.odd th { border-color: #977; }
 
@@ -308,7 +309,9 @@ HTML_CSS = """
     }
 
     pre  { margin: 5px 0 0; padding: 6px 5px; white-space: pre; overflow: auto; }
-    code { margin: 0 2px; padding: 2px 5px; white-space: nowrap; }
+    code { margin: 0 2px; padding: 2px 5px; /*white-space: nowrap;*/ }
+
+    pre code {border: none }
 
     #TOC    { margin-top: 30px; background-color: #e5efdf; border: 1px solid #cedec4;}
     #TOC a  { margin: 0 15px !important; }
@@ -359,10 +362,10 @@ HTML_CSS = """
     .error p.admonition-title, .caution p.admonition-title, .danger p.admonition-title
     {background-color: #b04040; border-color: #900000;}
 
-    .admonition.hint, .admonition.download 
+    .admonition.hint
     {background-color: #ECFAE3;  border-color: #609060;}
 
-    .hint p.admonition-title, .download p.admonition-title 
+    .hint p.admonition-title
     {background-color: #70A070; border-color: #609060;}
 
     .admonition.note, .admonition.tip, .admonition.warning
@@ -745,69 +748,74 @@ def parse_abbreviations(text):
 	return newtext
 
 def parse_admonitions(text):
-    """ Find and parse my admonitions. 
-    Input text: as list (just after open)
-    returns parsed text as list
+	""" Find and parse my admonitions. 
+	Input text: as list (just after open)
+	returns parsed text as list
 
-    Syntax:
-    [class/type:optional title]
+	Syntax:
+	[class/type:optional title]
       * markdown
       * super
       * content
     
-    would be translated as div:
-    <div class="admonition class/type">
-    <p class="admonition-title"> Optional title </p>
+	would be translated as div:
+	<div class="admonition class/type">
+	<p class="admonition-title"> Optional title </p>
       * markdown
       * super
       * content
-    </div>
+	</div>
     """
 
-    new_test = list()
-    admon_start = False
+	new_test = list()
+	admon_start = False
 
-    for line in text:
-        if line.count("[") == 1 and line.startswith("[") and (line.endswith("]\n") or line.endswith("]")):
-            admon_start = True
+	for line in text:
+		tmp_line = line.rstrip()
 
-            line = line.rstrip()
-            line = line[1:len(line)-1]
+		if tmp_line.count("[") == 1 and tmp_line.startswith("[") and tmp_line.endswith("]"):
+			if admon_start:
+				# close previous
+				new_test.append("</div>")
+
+			admon_start = True
+
+			tmp_line = tmp_line[1:len(tmp_line)-1]
             
-            if ":" in line:
-                admon_type, admon_title = line.split(':')
-            else:
-                admon_type = line
-                admon_title = None
+			if ":" in tmp_line:
+				admon_type, admon_title = tmp_line.split(':')
+			else:
+				admon_type = tmp_line
+				admon_title = None
 
-            new_str = '<div class="admonition ' + admon_type + '">'
-            new_test.append(new_str)
+			new_str = '<div class="admonition ' + admon_type + '">'
+			new_test.append(new_str)
 
-            if admon_title:
-                new_test.append('<p class="admonition-title">' + admon_title + '</p>')
+			if admon_title:
+				new_test.append('<p class="admonition-title">' + admon_title + '</p>')
 
-            continue 
+			continue 
 
-        if (line.startswith("\t") or line.startswith ("  ") or line == "\n") and admon_start:
-            if not line == "\n":
-                #remove first set of whitespace
-                if line.startswith("\t"):
-                	pattern = r'^\t{1}(.+)'
-                else:
-                	pattern = r'^\s{2,4}(.+)'
-                
-                line = re.sub(pattern, '\\1', line)
+		if (tmp_line.startswith("\t") or tmp_line.startswith ("  ") or not tmp_line) and admon_start:
+			if tmp_line:
+				#remove first set of whitespace
+				if tmp_line.startswith("\t"):
+					tmp_line = line.replace("\t", "", 1)
+				else:
+					tmp_line = re.sub(r'^\s{2,4}(.+)', '\\1', line)
+			else:
+				tmp_line = "\n"
 
-            new_test.append(line)
+			new_test.append(tmp_line)
 
-        else:
-            if admon_start:
-                new_test.append("</div>")
+		else:
+			if admon_start:
+				new_test.append("</div>")
 
-            new_test.append(line)
-            admon_start = False
+			new_test.append(line)
+			admon_start = False
 
-    return new_test
+	return new_test
 
 def find_TOCinFile(text, placeholder, replace_with='<!-- TOCatized -->'):
 	""" automatically check if text (as list) has the TOC tag. Replaces 
@@ -1053,6 +1061,7 @@ def get_args():
 		    help="Slides format. Options: " + ", ".join(_SLIDES_OPTIONS) + ". Default: %(default)s",  
 		    default=_DEFAULT_CONFIG['SLIDES'])
 	option_file.add_argument("--bib", help="Use bibliography file", metavar="FILE")
+	option_file.add_argument("--csl", help="CSL file", metavar="FILE")
 
 	exclusive = option_file.add_mutually_exclusive_group()
 	exclusive.add_argument("--merge", "-m", action="store_true", help="Merge files")
@@ -1138,6 +1147,7 @@ def get_args():
 		'merge': 'MERGE',
 		'book': 'BOOK',
 		'highlight_no': 'HIGHLIGHT_NO',
+		'csl': "CSL",
 		}
 
 	settings_args = dict()
