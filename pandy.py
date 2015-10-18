@@ -682,7 +682,8 @@ def check_synonyms(format_from, format_to):
 	"""Translate synonyms, return modified values """
 
 	format_from = translate_synonyms(format_from)
-		
+	format_to = list(format_to)
+	
 	i = 0
 	while i < len(format_to):
 		format_to[i] = translate_synonyms(format_to[i])
