@@ -145,6 +145,7 @@ _FORMATS_OUTPUT   = [
 	'epub', 'epub3', 'fb2', 'html5',
 	'pdf', #[*for pdf output, use latex or beamer and -o FILENAME.pdf] 
 	"slides", "slide", #options slides in another list
+	"dokuwiki"
 	]
 
 _HIGHLIGHT_OPTIONS = ('pygments', 'kate', 'monochrome', 'espresso', 'zenburn',
@@ -681,7 +682,7 @@ def check_synonyms(format_from, format_to):
 	"""Translate synonyms, return modified values """
 
 	format_from = translate_synonyms(format_from)
-
+		
 	i = 0
 	while i < len(format_to):
 		format_to[i] = translate_synonyms(format_to[i])
