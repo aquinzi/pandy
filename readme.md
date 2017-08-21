@@ -120,6 +120,11 @@ Specify the configuration file with ``--config`` (the extension doesn't matter, 
 History
 -----------
 
+### Version 2.0.3
+
+* misc fixes/bugs
+* fixes for css
+
 ### Version 2.0
 
 Total rewrite! Many fixes and (internal) cleanup/improvement. Also:

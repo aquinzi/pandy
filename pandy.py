@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # "Wrapper" for Pandoc (python 3): pandy [file/folder] [options]
-# tested for pandoc 1.12.3
+# tested for pandoc 1.19.2.1
 
 """
 	Basically takes a file/folder, input the markup to convert from, the output markup and run it through pandoc.
@@ -112,7 +112,7 @@ except ImportError:
 # ==== info & pandoc config ====
 # ==============================
 
-__version__ = "2.0.1"
+__version__ = "2.0.3"
 _MY_USAGE = ''' %(prog)s [source] [options] '''
 # must replace the lists inside. This is just to have a bit of order.
 _MY_DESCRIPTION = '''
@@ -166,10 +166,12 @@ _COMMANDS_COMPLETE = {
 	'HIGHLIGHT'    : "--highlight-style=",
 	'FILE_HEADER'  : "--include-before-body=",
 	'FILE_FOOTER'  : "--include-after-body=",
-	'CSL'          : "--csl="
+	'CSL'          : "--csl=",
+	'RAW_HTML'     : "--parse-raw"
+
 	}
 
-EXTENSIONS_EXTRA  = ('link_attributes', 'hard_line_breaks')
+EXTENSIONS_EXTRA  = ('link_attributes', 'hard_line_breaks', 'raw_html', '-markdown_in_html_blocks')
 
 # =======================
 # ==== configuration ====
@@ -187,7 +189,7 @@ _DEFAULT_CONFIG = {
 	'TEMPLATE_PANDY': False,
 	
 	'SOURCE': os.getcwd(),
-	'OUTPUT_PATH': '',
+	'OUTPUT_PATH': os.getcwd(),
 	'OUTPUT_FLAT': False,
 	'CONFIG_FILE' : DEFAULT_INI_NAME,
 	
@@ -226,15 +228,17 @@ HTML_CSS = """
     body {
         padding: 0px 25px; 
         margin: -1px auto;
-        font: 14px helvetica, "Segoe UI", arial, freesans, sans-serif; 
+        font: 14px "Noto Sans", "Segoe UI", "Open Sans", "Dejavu Sans" arial, sans-serif; 
         line-height: 1.8em;
         color: #3A3A3A;
         background-color: #f2f2f2;
     }
 
+    .jp {font-family: "Noto Sans CJK JP", "DejaVu Sans", "Open Sans", sans-serif; }
+
     p { margin: 1em 0; }
 
-    a {text-decoration: none; border-bottom: 1px dotted; color: #4183c4; }
+    a {text-decoration: none; border-bottom: 1px solid; color: #4183c4; }
     a:hover, a:active { color: #75A837; }
 
     blockquote {
@@ -297,10 +301,9 @@ HTML_CSS = """
     th, caption {color: #444; font-weight: bold;text-align: center;}
     td, th {padding: .6em .4em; vertical-align: top; border: 1px solid #779; }
     th, tfoot td {border: 1px solid #361; background: #e0e5cf; }
-    /*tr { background:#f5f5f5 }*/
     tr { background: #cfe0e5 }
-    tr.odd { background: #e5cfe0 }
-    tr.odd td, tr.odd th { border-color: #977; }
+    tr:nth-of-type(odd){background:#e5cfe0;}
+    tr:nth-of-type(odd) td, tr:nth-of-type(odd) th {background:#977;}
 
     pre, code {
         border:         1px solid #ccc;
@@ -382,6 +385,7 @@ HTML_CSS = """
     {background-color: #7088A0; border-color: #94A7BF;}
 
     mark {background-color: #e7d600; padding: 0.2em;}
+    mark.second {background-color: #f08333;}
 
     .bookbar {padding: 10px; border: 1px solid #ccc; border-width: 1px 0; overflow: auto}
     .bookbar li {display: inline-block;}
@@ -1064,6 +1068,7 @@ def get_args():
 		    default=_DEFAULT_CONFIG['SLIDES'])
 	option_file.add_argument("--bib", help="Use bibliography file", metavar="FILE")
 	option_file.add_argument("--csl", help="CSL file", metavar="FILE")
+	option_file.add_argument("--parse-raw", help="RAW_HTML", action="store_true")
 
 	exclusive = option_file.add_mutually_exclusive_group()
 	exclusive.add_argument("--merge", "-m", action="store_true", help="Merge files")
@@ -1150,6 +1155,7 @@ def get_args():
 		'book': 'BOOK',
 		'highlight_no': 'HIGHLIGHT_NO',
 		'csl': "CSL",
+		'parse_raw' : 'RAW_HTML'
 		}
 
 	settings_args = dict()
@@ -1186,7 +1192,7 @@ def prepare_args(arg_dict):
 	# complete missing options. default <- .ini <- args 
 	# read ini and replace default
 	if os.path.exists(settings_final['CONFIG_FILE']):
-		settings_file = get_ini(settings_final['CONFIG_FILE'], True, space_list=('format_to'))
+		settings_file = get_ini(settings_final['CONFIG_FILE'], True, space_list=('format_to','extensions_extra'))
 		settings_final.update(settings_file)
 
 	#remove config option (just because)
@@ -1422,7 +1428,7 @@ class Pandy(object):
 			if key in exclude:
 				continue
 			self.command += translate_argsPandoc(key, val)
-	
+
 		# and run!
 		self.run()
 
@@ -1435,7 +1441,15 @@ class Pandy(object):
 
 		if way in ['f', 't']:
 			if markup == 'markdown':
-				extensions = "+".join(EXTENSIONS_EXTRA)
+				extensions = ""
+				for tmp in self.settings['EXTENSIONS_EXTRA']:
+					if tmp.startswith("-"):
+						extensions += tmp
+					else:
+						if not extensions:
+							extensions += tmp
+						else:
+							extensions += "+" + tmp
 				makeme += ["markdown+" + extensions]
 
 			elif markup == "slides":
@@ -1642,17 +1656,18 @@ class Pandy(object):
 			sidebar_navigation = self.makeNavigationLinks(href_active=current['output'])
 
 			if self.settings['NAV_SIDEBAR']:
-				newcommand.append('--variable=side_navigation:' +sidebar_navigation)
+				newcommand.append('--variable=side_navigation:' + sidebar_navigation)
 
 			if self.settings['USE_NAV']:
 				newcommand.append('--variable=book_navigation:' + book_navigation)
 
 			self.finallySave(newcommand, current, book_nav=book_navigation, sidebar=sidebar_navigation, 
 				            projindex=proj_index, pagetitle=current['title'])
-		
+
 		msg("Processing: index")
 
 		index_cmd = list(self.command)
+
 		if "--toc" in index_cmd:
 			index_cmd.remove("--toc")
 
@@ -1675,17 +1690,17 @@ class Pandy(object):
 			run_subprocess(local_cmd, True, current_file['text'])
 		else: 
 			trying = run_subprocess(local_cmd, True, current_file['text'])
-			this_text = builtintpl(str(trying, encoding='utf-8'), **kwargs)		
-			
+			this_text = builtintpl(str(trying, encoding='utf-8'), **kwargs)
+
 			save(current_file['real_output'], this_text)			
 
 	def _getOutputPath(self, filepath, strip_root=False):
 		"""Get output path"""
 
+		cooking = ""
+		
 		if not self.output:
 			return path_delExtension(filepath)
-
-		cooking = ""
 
 		if self.settings['OUTPUT_FLAT'] or (not self.settings['OUTPUT_FLAT'] and filepath == self.input):
 			cooking = path_delExtension(path_getFilename(filepath))
@@ -1694,7 +1709,7 @@ class Pandy(object):
 
 		if strip_root:
 			return cooking
-		
+
 		return os.path.join(self.output, cooking)
 
 	def _bookNavigation(self, prop_current, prop_prev, prop_next):
@@ -1908,6 +1923,9 @@ if __name__ == '__main__':
 
 # History 
 
+# 2017-08-21:  version 2.0.3 (released)
+#              misc fixes/bugs
+#              fixes for css
 # 2014-02-18:  wikilinks fixes
 # 2014-02-16:  Version 2.0 (released)
 #              updated tests
