@@ -291,7 +291,11 @@ HTML_CSS = """
     dt { padding: 5px 0 5px; font-weight: bold; line-height: normal; }
     dd { padding: 0 10px 20px 3em; font-style: italic; }
 
-    /* based on http://icant.co.uk/csstablegallery/tables/50.php (Blaugrana). */
+    /* based on 
+	 http://icant.co.uk/csstablegallery/tables/50.php (Blaugrana).   DEAD! 
+	 http://www.csslab.cl/csstablegallery/   previews are DEAD as well as some links 
+	 probably works: https://web.archive.org/web/20130829004021/http://icant.co.uk:80/csstablegallery/tables/50.php
+	 */
     table { 
         padding: 0; margin: 0 auto 2em auto;
         border-spacing: 0; border-collapse: collapse;
@@ -303,7 +307,7 @@ HTML_CSS = """
     th, tfoot td {border: 1px solid #361; background: #e0e5cf; }
     tr { background: #cfe0e5 }
     tr:nth-of-type(odd){background:#e5cfe0;}
-    tr:nth-of-type(odd) td, tr:nth-of-type(odd) th {background:#977;}
+    tr:nth-of-type(odd) td, tr:nth-of-type(odd) th {border-color:#977;}
 
     pre, code {
         border:         1px solid #ccc;
