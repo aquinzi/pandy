@@ -228,7 +228,7 @@ HTML_CSS = """
     body {
         padding: 0px 25px; 
         margin: -1px auto;
-        font: 14px "Noto Sans", "Segoe UI", "Open Sans", "Dejavu Sans" arial, sans-serif; 
+        font: 14px "Noto Sans", "Segoe UI", "Open Sans", "Dejavu Sans", arial, sans-serif; 
         line-height: 1.8em;
         color: #3A3A3A;
         background-color: #f2f2f2;
@@ -266,9 +266,10 @@ HTML_CSS = """
         vertical-align: super;
         position:       relative;
     }
-
-    sub             {vertical-align: sub; top: -1px; }
+	 
+    sub            {vertical-align: sub; top: -1px; }
     a.footnote-ref { font-size: 1em; }
+    span.citation { font-size: 0.74em; }
 
     abbr { border-bottom: 1px dotted }
 
@@ -289,7 +290,7 @@ HTML_CSS = """
     dl, dt, dd { margin: 0; }
     dl { padding: 0px 1em 10px; }
     dt { padding: 5px 0 5px; font-weight: bold; line-height: normal; }
-    dd { padding: 0 10px 20px 3em; font-style: italic; }
+    dd { padding: 0 10px 20px 3em; }
 
     /* based on 
 	 http://icant.co.uk/csstablegallery/tables/50.php (Blaugrana).   DEAD! 
@@ -311,15 +312,14 @@ HTML_CSS = """
 
     pre, code {
         border:         1px solid #ccc;
-        font-size:      12px;
-        font-family:    Consolas, "Liberation Mono", Courier, monospace;
+        font-size:      12px;    
         background-color:#eee;
     }
 
     pre  { margin: 5px 0 0; padding: 6px 5px; white-space: pre; overflow: auto; }
-    code { margin: 0 2px; padding: 2px 5px; /*white-space: nowrap;*/ }
+    code { font-family:    Consolas, "Liberation Mono", Courier, monospace; margin: 0 2px; padding: 2px 5px; /*white-space: nowrap;*/ }
 
-    pre code {border: none }
+    pre code { border: none }
 
     #TOC    { margin-top: 30px; background-color: #e5efdf; border: 1px solid #cedec4;}
     #TOC a  { margin: 0 15px !important; }
