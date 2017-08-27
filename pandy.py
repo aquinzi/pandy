@@ -234,7 +234,7 @@ HTML_CSS = """
         background-color: #f2f2f2;
     }
 
-    .jp {font-family: "Noto Sans CJK JP", "DejaVu Sans", "Open Sans", sans-serif; }
+    .jp, [lang=jp] {font-family: "Noto Sans CJK JP", "DejaVu Sans", "Open Sans", sans-serif; }
 
     p { margin: 1em 0; }
 
