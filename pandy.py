@@ -1111,7 +1111,7 @@ def get_args():
 		    help="(For book) Disable sidebar navigation")
 	other.add_argument("--no-side-toc", "-nst", action="store_true", 
 		    help="(For book) disable TOC in sidebar (keep in doc)")
-
+			 
 	pandoc = parser.add_argument_group(' Pandoc')
 	pandoc.add_argument("--pandoc",   default=_DEFAULT_CONFIG['PANDOC'], 
 		    help="Pandoc path. Default: %(default)s")
@@ -1159,7 +1159,7 @@ def get_args():
 		'book': 'BOOK',
 		'highlight_no': 'HIGHLIGHT_NO',
 		'csl': "CSL",
-		'parse_raw' : 'RAW_HTML'
+		'parse_raw' : 'RAW_HTML',
 		}
 
 	settings_args = dict()
@@ -1507,7 +1507,7 @@ class Pandy(object):
 				if not answer:
 					exit()
 
-			if len(self.files) < 3:
+			if len(self.files) < 1:
 				msg("Feed me more files to make something pretty :) ")
 				exit()
 
