@@ -260,7 +260,7 @@ HTML_CSS = """
 
     hr { border: 0; height: 1px; background: #333; }
 
-    sup, sub, a.footnote-ref {
+    sup, sub, a.footnote-ref, span.citation {
         height:         0;
         line-height:    1;
         vertical-align: super;
